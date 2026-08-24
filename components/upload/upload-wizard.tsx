@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { useCallback, useEffect, useRef, useState, type FocusEventHandler, type RefObject } from 'react';
 import { AlertTriangle, Check, FileUp, LoaderCircle, RotateCcw, Send, ShieldCheck } from 'lucide-react';
 import { appSignInPath } from '../../lib/auth/session';

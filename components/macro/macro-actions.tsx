@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { CheckCircle2, Heart, History, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { appSignInPath } from '../../lib/auth/session';

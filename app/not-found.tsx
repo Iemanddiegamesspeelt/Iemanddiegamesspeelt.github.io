@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../components/ui/native-link';
 import { ArrowLeft, FileQuestion } from 'lucide-react';
 
 export default function NotFound() {
@@ -21,4 +21,3 @@ export default function NotFound() {
     </main>
   );
 }
-

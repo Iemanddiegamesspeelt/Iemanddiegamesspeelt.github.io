@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from './native-link';
 import { ArrowUpRight } from 'lucide-react';
 
 export function SectionHeader({

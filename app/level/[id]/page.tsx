@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '../../../components/ui/native-link';
 import { notFound } from 'next/navigation';
 import { MacroCard } from '../../../components/macro/macro-card';
 import { EmptyState } from '../../../components/ui/empty-state';

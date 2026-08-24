@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Link from '../ui/native-link';
 import {
   Compass,
   Crown,
@@ -14,7 +13,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Logo } from '../ui/logo';
 import { cn } from '../../lib/utils';
 import { appSignInPath } from '../../lib/auth/session';
@@ -28,13 +27,17 @@ const navItems = [
   { href: '/leaderboard', label: 'Leaderboard', icon: Crown },
 ];
 
+const subscribeToPathname = () => () => undefined;
+const readPathname = () => window.location.pathname;
+const readServerPathname = () => '';
+
 export interface NavbarUser {
   displayName: string;
   email: string;
 }
 
 export function Navbar({ user }: { user: NavbarUser | null }) {
-  const pathname = usePathname();
+  const pathname = useSyncExternalStore(subscribeToPathname, readPathname, readServerPathname);
   const [open, setOpen] = useState(false);
   const current = (href: string) => href === '/' ? pathname === '/' : pathname.startsWith(href);
 
@@ -119,4 +122,3 @@ export function Navbar({ user }: { user: NavbarUser | null }) {
     </>
   );
 }
-

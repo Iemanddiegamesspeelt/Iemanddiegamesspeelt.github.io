@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { Check, FolderPlus, LoaderCircle, X } from 'lucide-react';
 import { useState } from 'react';
 

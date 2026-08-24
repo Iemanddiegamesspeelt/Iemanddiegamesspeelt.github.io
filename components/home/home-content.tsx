@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { ArrowRight, FileSearch, Repeat2, Upload, Wrench } from 'lucide-react';
 import type { LevelRecord, MacroRecord, ProfileRecord } from '../../lib/data/types';
 import { SearchBox } from '../ui/search-box';

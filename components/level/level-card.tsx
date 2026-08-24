@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { ArrowRight, Download, Layers3 } from 'lucide-react';
 import type { LevelRecord } from '../../lib/data/types';
 import { compactNumber, cn } from '../../lib/utils';

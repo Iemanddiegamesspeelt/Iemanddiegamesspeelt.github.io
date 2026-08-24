@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { ArrowRight, Download, Gauge, Heart, MousePointerClick } from 'lucide-react';
 import type { LevelRecord, MacroRecord, ProfileRecord } from '../../lib/data/types';
 import { getFormat } from '../../lib/replay/registry';

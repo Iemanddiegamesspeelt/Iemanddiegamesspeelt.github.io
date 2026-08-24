@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '../../components/ui/native-link';
 import { Avatar } from '../../components/ui/avatar';
 import { EmptyState } from '../../components/ui/empty-state';
 import { LevelCard } from '../../components/level/level-card';

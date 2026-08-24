@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { ArrowRight, Globe2, Lock, Layers3 } from 'lucide-react';
 import type { CollectionRecord } from '../../lib/data/types';
 import { formatDate } from '../../lib/utils';

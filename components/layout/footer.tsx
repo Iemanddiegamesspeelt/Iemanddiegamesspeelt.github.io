@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { Logo } from '../ui/logo';
 
 export function Footer() {

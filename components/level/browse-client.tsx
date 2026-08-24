@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '../ui/native-link';
 import { Filter, RotateCcw, SearchX, SlidersHorizontal, Upload } from 'lucide-react';
 import type { LevelRecord } from '../../lib/data/types';
 import { LevelCard } from './level-card';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from './native-link';
 import { cn } from '../../lib/utils';
 
 export function Logo({ compact = false, className }: { compact?: boolean; className?: string }) {

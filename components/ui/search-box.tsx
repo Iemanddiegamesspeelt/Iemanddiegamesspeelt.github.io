@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from './native-link';
 import { ArrowRight, LoaderCircle, Search, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 

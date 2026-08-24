@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '../../components/ui/native-link';
 import { requireChatGPTUser, chatGPTSignOutPath } from '../chatgpt-auth';
 import { ensureAppUser } from '../../lib/auth/app-user';
 import { SettingsForm } from '../../components/profile/settings-form';
