@@ -1,0 +1,574 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum UserState {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
+enum LevelDifficulty {
+  AUTO
+  EASY
+  NORMAL
+  HARD
+  HARDER
+  INSANE
+  DEMON
+  UNKNOWN
+}
+
+enum DemonDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  INSANE
+  EXTREME
+}
+
+enum LevelLength {
+  TINY
+  SHORT
+  MEDIUM
+  LONG
+  XL
+  PLATFORMER
+  UNKNOWN
+}
+
+enum MacroWorkingStatus {
+  WORKING
+  UNVERIFIED
+  POSSIBLY_OUTDATED
+  BROKEN
+  REMOVED
+}
+
+enum PublicationState {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+  REMOVED
+}
+
+enum MacroFileKind {
+  ORIGINAL
+  GENERATED_CACHE
+}
+
+enum FileState {
+  PENDING
+  READY
+  QUARANTINED
+  REJECTED
+  DELETED
+}
+
+enum FormatImplementationStatus {
+  IMPLEMENTED
+  PLANNED
+  DISABLED
+}
+
+enum ToolStatus {
+  ACTIVE
+  DEPRECATED
+  PLANNED
+}
+
+enum CompatibilitySupport {
+  NATIVE
+  COMPATIBLE
+  EXPERIMENTAL
+  UNSUPPORTED
+}
+
+enum CompatibilityDirection {
+  IMPORT
+  EXPORT
+  BOTH
+}
+
+enum ConversionQuality {
+  LOSSLESS
+  COMPATIBLE
+  OPTIONAL_METADATA_LOSS
+  BLOCKED
+}
+
+enum CommentState {
+  VISIBLE
+  DELETED
+  REMOVED
+}
+
+enum CollectionVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum ReportVerdict {
+  WORKING
+  BROKEN
+  OUTDATED
+  MALICIOUS
+  OTHER
+}
+
+enum ReportReviewState {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModerationActionType {
+  REMOVE_MACRO
+  RESTORE_MACRO
+  REMOVE_COMMENT
+  RESTORE_COMMENT
+  BAN_USER
+  UNBAN_USER
+  SET_MACRO_STATUS
+  UPDATE_FORMAT
+  UPDATE_REPLAY_TOOL
+  UPDATE_COMPATIBILITY
+  RESOLVE_REPORT
+}
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  authProvider      String     @default("chatgpt") @db.VarChar(32)
+  authSubject       String     @db.VarChar(191)
+  email             String     @db.VarChar(320)
+  emailNormalized   String     @unique @db.VarChar(320)
+  role              UserRole   @default(USER)
+  state             UserState  @default(ACTIVE)
+  bannedUntil       DateTime?  @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
+  deletedAt         DateTime?  @db.Timestamptz(3)
+
+  profile                   Profile?
+  macros                    Macro[]
+  likes                     Like[]
+  comments                  Comment[]
+  collections               Collection[]
+  downloads                 Download[]
+  macroReports              MacroReport[]       @relation("ReporterReports")
+  reviewedMacroReports      MacroReport[]       @relation("ReviewedReports")
+  commentReports            CommentReport[]     @relation("CommentReporter")
+  moderationActions         ModerationAction[]  @relation("ModeratorActions")
+  moderationActionsReceived ModerationAction[]  @relation("TargetUserActions")
+  moderationReversions      ModerationAction[]  @relation("RevertedActions")
+
+  @@unique([authProvider, authSubject])
+  @@index([role, state])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Profile {
+  userId             String   @id @db.Uuid
+  username           String   @db.VarChar(32)
+  usernameNormalized String   @unique @db.VarChar(32)
+  displayName        String?  @db.VarChar(80)
+  bio                String?  @db.VarChar(500)
+  avatarStorageKey   String?  @db.VarChar(512)
+  macroCount         Int      @default(0)
+  totalDownloads     Int      @default(0)
+  totalLikes         Int      @default(0)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([totalDownloads(sort: Desc)])
+  @@index([totalLikes(sort: Desc)])
+}
+
+model Level {
+  id                String           @id @default(uuid()) @db.Uuid
+  providerKey       String           @default("geometry-dash") @db.VarChar(64)
+  externalId        String           @db.VarChar(32)
+  name              String           @db.VarChar(120)
+  nameNormalized    String           @db.VarChar(120)
+  creatorName       String           @db.VarChar(80)
+  creatorNormalized String           @db.VarChar(80)
+  difficulty        LevelDifficulty  @default(UNKNOWN)
+  demonDifficulty   DemonDifficulty?
+  length            LevelLength      @default(UNKNOWN)
+  stars             Int?
+  gdVersion         String?          @db.VarChar(32)
+  metadata          Json?
+  metadataFetchedAt DateTime?        @db.Timestamptz(3)
+  macroCount        Int              @default(0)
+  totalDownloads    Int              @default(0)
+  isDemo            Boolean          @default(false)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+
+  macros Macro[]
+
+  @@unique([providerKey, externalId])
+  @@index([nameNormalized])
+  @@index([creatorNormalized])
+  @@index([difficulty, demonDifficulty, length, gdVersion])
+  @@index([totalDownloads(sort: Desc)])
+}
+
+model Macro {
+  id                       String              @id @default(uuid()) @db.Uuid
+  levelId                  String              @db.Uuid
+  uploaderId               String              @db.Uuid
+  originalFormatId         String              @db.Uuid
+  sourceUploadId           String              @unique @db.Uuid
+  title                    String              @db.VarChar(140)
+  titleNormalized          String              @db.VarChar(140)
+  description              String?             @db.VarChar(4000)
+  completionBasisPoints    Int?
+  tps                      Decimal?            @db.Decimal(10, 3)
+  fps                      Decimal?            @db.Decimal(10, 3)
+  inputCount               Int
+  durationMs               Int
+  player1InputCount        Int
+  player2InputCount        Int                 @default(0)
+  recordedGdVersion        String?             @db.VarChar(32)
+  workingStatus            MacroWorkingStatus  @default(UNVERIFIED)
+  publicationState         PublicationState    @default(DRAFT)
+  canonicalHash            String              @db.Char(64)
+  downloadCount            Int                 @default(0)
+  likeCount                Int                 @default(0)
+  commentCount             Int                 @default(0)
+  publishedAt              DateTime?           @db.Timestamptz(3)
+  isDemo                   Boolean             @default(false)
+  createdAt                DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime            @updatedAt @db.Timestamptz(3)
+  deletedAt                DateTime?           @db.Timestamptz(3)
+
+  level                  Level                        @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  uploader               User                         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  originalFormat         MacroFormat                  @relation(fields: [originalFormatId], references: [id], onDelete: Restrict)
+  canonicalReplay        MacroCanonicalReplay?
+  files                  MacroFile[]
+  conversionCapabilities MacroConversionCapability[]
+  likes                  Like[]
+  comments               Comment[]
+  collectionMacros       CollectionMacro[]
+  reports                MacroReport[]
+  downloads              Download[]
+  moderationActions      ModerationAction[]
+
+  @@index([levelId, publicationState, publishedAt(sort: Desc)])
+  @@index([publicationState, workingStatus, downloadCount(sort: Desc)])
+  @@index([publicationState, likeCount(sort: Desc)])
+  @@index([uploaderId, publicationState, publishedAt(sort: Desc)])
+  @@index([originalFormatId, publicationState])
+  @@index([canonicalHash])
+  @@index([titleNormalized])
+}
+
+model MacroCanonicalReplay {
+  macroId       String   @id @db.Uuid
+  schemaVersion Int
+  storageKey    String   @unique @db.VarChar(512)
+  sha256        String   @db.Char(64)
+  byteSize      Int
+  eventCount    Int
+  extensions    Json?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  macro Macro @relation(fields: [macroId], references: [id], onDelete: Cascade)
+}
+
+model MacroFile {
+  id              String        @id @default(uuid()) @db.Uuid
+  macroId         String        @db.Uuid
+  formatId        String        @db.Uuid
+  kind            MacroFileKind
+  storageKey      String        @unique @db.VarChar(512)
+  sha256          String        @db.Char(64)
+  byteSize        Int
+  mimeType        String        @db.VarChar(191)
+  extension       String        @db.VarChar(24)
+  state           FileState     @default(PENDING)
+  exporterVersion String?       @db.VarChar(64)
+  generationKey   String?       @unique @db.VarChar(191)
+  expiresAt       DateTime?     @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+
+  macro  Macro       @relation(fields: [macroId], references: [id], onDelete: Cascade)
+  format MacroFormat @relation(fields: [formatId], references: [id], onDelete: Restrict)
+
+  @@index([macroId, kind, state])
+  @@index([formatId, state])
+  @@index([expiresAt])
+}
+
+model MacroFormat {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  slug                 String                     @unique @db.VarChar(64)
+  name                 String                     @db.VarChar(80)
+  defaultExtension     String                     @db.VarChar(24)
+  mimeTypes            String[]
+  implementationStatus FormatImplementationStatus @default(PLANNED)
+  enabled              Boolean                    @default(true)
+  sortOrder            Int                        @default(0)
+  documentationUrl     String?                    @db.VarChar(512)
+  warning              String?                    @db.VarChar(500)
+  createdAt            DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                   @updatedAt @db.Timestamptz(3)
+
+  macros                  Macro[]
+  files                   MacroFile[]
+  toolCompatibility       FormatToolCompatibility[]
+  conversionCapabilities  MacroConversionCapability[]
+  downloads               Download[]
+  moderationActions       ModerationAction[]
+
+  @@index([enabled, sortOrder])
+}
+
+model ReplayTool {
+  id                String                     @id @default(uuid()) @db.Uuid
+  slug              String                     @unique @db.VarChar(64)
+  name              String                     @db.VarChar(80)
+  websiteUrl        String?                    @db.VarChar(512)
+  iconStorageKey    String?                    @db.VarChar(512)
+  status            ToolStatus                @default(ACTIVE)
+  currentVersion    String?                    @db.VarChar(64)
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @db.Timestamptz(3)
+
+  formatCompatibility FormatToolCompatibility[]
+  downloads           Download[]
+  moderationActions   ModerationAction[]
+
+  @@index([status, name])
+}
+
+model FormatToolCompatibility {
+  formatId         String                 @db.Uuid
+  replayToolId     String                 @db.Uuid
+  direction        CompatibilityDirection @default(IMPORT)
+  supportLevel     CompatibilitySupport  @default(COMPATIBLE)
+  verification     String                @default("unknown") @db.VarChar(32)
+  canRead          Boolean               @default(true)
+  canWrite         Boolean               @default(false)
+  recommended      Boolean               @default(false)
+  minToolVersion   String?               @db.VarChar(64)
+  maxToolVersion   String?               @db.VarChar(64)
+  warning          String?               @db.VarChar(500)
+  verifiedAt       DateTime?             @db.Timestamptz(3)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime              @updatedAt @db.Timestamptz(3)
+
+  format     MacroFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+  replayTool ReplayTool  @relation(fields: [replayToolId], references: [id], onDelete: Cascade)
+
+  @@id([formatId, replayToolId])
+  @@index([replayToolId, canRead, supportLevel, formatId])
+}
+
+model MacroConversionCapability {
+  macroId        String            @db.Uuid
+  formatId       String            @db.Uuid
+  quality        ConversionQuality
+  warningCodes   String[]
+  details        Json?
+  canonicalHash  String            @db.Char(64)
+  exporterVersion String           @db.VarChar(64)
+  checkedAt      DateTime          @default(now()) @db.Timestamptz(3)
+
+  macro  Macro       @relation(fields: [macroId], references: [id], onDelete: Cascade)
+  format MacroFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@id([macroId, formatId])
+  @@index([formatId, quality, macroId])
+}
+
+model Like {
+  userId    String   @db.Uuid
+  macroId   String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  macro Macro @relation(fields: [macroId], references: [id], onDelete: Cascade)
+
+  @@id([userId, macroId])
+  @@index([macroId, createdAt(sort: Desc)])
+}
+
+model Comment {
+  id        String       @id @default(uuid()) @db.Uuid
+  macroId   String       @db.Uuid
+  authorId  String       @db.Uuid
+  parentId  String?      @db.Uuid
+  body      String       @db.VarChar(2000)
+  state     CommentState @default(VISIBLE)
+  editedAt  DateTime?    @db.Timestamptz(3)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+
+  macro             Macro              @relation(fields: [macroId], references: [id], onDelete: Cascade)
+  author            User               @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parent            Comment?           @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Restrict)
+  replies           Comment[]          @relation("CommentReplies")
+  reports           CommentReport[]
+  moderationActions ModerationAction[]
+
+  @@index([macroId, state, createdAt])
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([parentId])
+}
+
+model CommentReport {
+  id         String            @id @default(uuid()) @db.Uuid
+  commentId  String            @db.Uuid
+  reporterId String            @db.Uuid
+  reason     String            @db.VarChar(80)
+  details    String?           @db.VarChar(1000)
+  state      ReportReviewState @default(OPEN)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+
+  comment  Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter User    @relation("CommentReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+
+  @@unique([commentId, reporterId])
+  @@index([state, createdAt])
+}
+
+model Collection {
+  id             String               @id @default(uuid()) @db.Uuid
+  ownerId        String               @db.Uuid
+  name           String               @db.VarChar(100)
+  slugNormalized String               @db.VarChar(120)
+  description    String?              @db.VarChar(1000)
+  visibility     CollectionVisibility @default(PUBLIC)
+  macroCount     Int                  @default(0)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+
+  owner  User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  macros CollectionMacro[]
+
+  @@unique([ownerId, slugNormalized])
+  @@index([visibility, updatedAt(sort: Desc)])
+}
+
+model CollectionMacro {
+  collectionId String   @db.Uuid
+  macroId      String   @db.Uuid
+  position     Int?
+  note         String?  @db.VarChar(500)
+  addedAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  macro      Macro      @relation(fields: [macroId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, macroId])
+  @@index([macroId])
+  @@index([collectionId, position])
+}
+
+model MacroReport {
+  id           String            @id @default(uuid()) @db.Uuid
+  macroId      String            @db.Uuid
+  reporterId   String            @db.Uuid
+  verdict      ReportVerdict
+  details      String?           @db.VarChar(1000)
+  state        ReportReviewState @default(OPEN)
+  reviewedById String?           @db.Uuid
+  reviewedAt   DateTime?         @db.Timestamptz(3)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+
+  macro      Macro @relation(fields: [macroId], references: [id], onDelete: Cascade)
+  reporter   User  @relation("ReporterReports", fields: [reporterId], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("ReviewedReports", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([macroId, reporterId])
+  @@index([state, createdAt])
+  @@index([reviewedById])
+}
+
+model Download {
+  id                String   @id @default(uuid()) @db.Uuid
+  macroId           String   @db.Uuid
+  formatId          String   @db.Uuid
+  userId            String?  @db.Uuid
+  replayToolId      String?  @db.Uuid
+  actorHash         String   @db.Char(64)
+  dedupeWindowStart DateTime @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  macro      Macro       @relation(fields: [macroId], references: [id], onDelete: Cascade)
+  format     MacroFormat @relation(fields: [formatId], references: [id], onDelete: Restrict)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  replayTool ReplayTool? @relation(fields: [replayToolId], references: [id], onDelete: SetNull)
+
+  @@unique([macroId, formatId, actorHash, dedupeWindowStart])
+  @@index([macroId, createdAt(sort: Desc)])
+  @@index([formatId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([replayToolId])
+}
+
+model ModerationAction {
+  id              String               @id @default(uuid()) @db.Uuid
+  moderatorId     String               @db.Uuid
+  action          ModerationActionType
+  reason          String               @db.VarChar(1000)
+  snapshot        Json?
+  targetUserId    String?              @db.Uuid
+  targetMacroId   String?              @db.Uuid
+  targetCommentId String?              @db.Uuid
+  targetFormatId  String?              @db.Uuid
+  targetToolId    String?              @db.Uuid
+  revertedById    String?              @db.Uuid
+  revertedAt      DateTime?            @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @db.Timestamptz(3)
+
+  moderator     User         @relation("ModeratorActions", fields: [moderatorId], references: [id], onDelete: Restrict)
+  targetUser    User?        @relation("TargetUserActions", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetMacro   Macro?       @relation(fields: [targetMacroId], references: [id], onDelete: SetNull)
+  targetComment Comment?     @relation(fields: [targetCommentId], references: [id], onDelete: SetNull)
+  targetFormat  MacroFormat? @relation(fields: [targetFormatId], references: [id], onDelete: SetNull)
+  targetTool    ReplayTool?  @relation(fields: [targetToolId], references: [id], onDelete: SetNull)
+  revertedBy    User?        @relation("RevertedActions", fields: [revertedById], references: [id], onDelete: SetNull)
+
+  @@index([moderatorId, createdAt(sort: Desc)])
+  @@index([targetUserId])
+  @@index([targetMacroId])
+  @@index([targetCommentId])
+  @@index([targetFormatId])
+  @@index([targetToolId])
+}
+
+model RateLimitBucket {
+  bucketKey   String   @db.VarChar(191)
+  windowStart DateTime @db.Timestamptz(3)
+  count       Int      @default(1)
+  expiresAt   DateTime @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([bucketKey, windowStart])
+  @@index([expiresAt])
+}

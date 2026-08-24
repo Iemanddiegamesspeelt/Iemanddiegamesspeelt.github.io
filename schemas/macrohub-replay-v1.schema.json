@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macrohub.example/schemas/macrohub-replay-v1.schema.json",
+  "title": "MacroHub Canonical Replay v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schemaVersion", "source", "clock", "level", "recording", "events"],
+  "properties": {
+    "schema": { "const": "macrohub/replay" },
+    "schemaVersion": { "const": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formatId", "parserVersion", "sha256"],
+      "properties": {
+        "formatId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "parserVersion": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticksPerSecond"],
+      "properties": { "ticksPerSecond": { "$ref": "#/$defs/rational" } }
+    },
+    "level": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stringFact" },
+        "name": { "$ref": "#/$defs/stringFact" }
+      }
+    },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replayVersion": { "$ref": "#/$defs/stringFact" },
+        "geometryDashVersion": { "$ref": "#/$defs/stringFact" },
+        "declaredRate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "provenance"],
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": { "enum": ["tps", "fps"] },
+                "value": { "$ref": "#/$defs/rational" }
+              }
+            },
+            "provenance": { "$ref": "#/$defs/provenance" }
+          }
+        },
+        "completionPercent": { "$ref": "#/$defs/numberFact" }
+      }
+    },
+    "durationTicks": { "$ref": "#/$defs/uintString" },
+    "events": {
+      "type": "array",
+      "maxItems": 250000,
+      "items": { "$ref": "#/$defs/event" }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$" }
+    }
+  },
+  "$defs": {
+    "uintString": { "type": "string", "maxLength": 32, "pattern": "^(0|[1-9][0-9]*)$" },
+    "rational": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": { "type": "string", "maxLength": 32, "pattern": "^[1-9][0-9]*$" },
+        "denominator": { "type": "string", "maxLength": 32, "pattern": "^[1-9][0-9]*$" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["source-file", "user", "level-provider", "derived"] },
+        "detail": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "stringFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": { "type": "string", "maxLength": 500 },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "numberFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": { "type": "number" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "control": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "enum": ["jump", "left", "right"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "namespace", "code"],
+          "properties": {
+            "kind": { "const": "opaque" },
+            "namespace": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "code": { "type": "string", "minLength": 1, "maxLength": 120 }
+          }
+        }
+      ]
+    },
+    "eventBase": {
+      "type": "object",
+      "required": ["tick", "order", "kind"],
+      "properties": {
+        "tick": { "$ref": "#/$defs/uintString" },
+        "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "kind": { "type": "string" }
+      }
+    },
+    "event": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/eventBase" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tick", "order", "kind", "player", "control", "state"],
+              "properties": {
+                "tick": { "$ref": "#/$defs/uintString" },
+                "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+                "kind": { "const": "input" },
+                "player": { "enum": [1, 2] },
+                "control": { "$ref": "#/$defs/control" },
+                "state": { "enum": ["press", "release"] }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tick", "order", "kind", "player"],
+          "properties": {
+            "tick": { "$ref": "#/$defs/uintString" },
+            "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "kind": { "const": "player-state" },
+            "player": { "enum": [1, 2] },
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "rotation": { "type": "number" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tick", "order", "kind"],
+          "properties": {
+            "tick": { "$ref": "#/$defs/uintString" },
+            "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "kind": { "const": "death" },
+            "player": { "enum": [1, 2] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tick", "order", "kind", "action"],
+          "properties": {
+            "tick": { "$ref": "#/$defs/uintString" },
+            "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "kind": { "const": "checkpoint" },
+            "action": { "enum": ["create", "activate", "remove"] },
+            "checkpointId": { "type": "string", "maxLength": 120 },
+            "player": { "enum": [1, 2] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tick", "order", "kind", "namespace", "eventType", "critical", "payload"],
+          "properties": {
+            "tick": { "$ref": "#/$defs/uintString" },
+            "order": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            "kind": { "const": "extension" },
+            "namespace": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "eventType": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "critical": { "type": "boolean" },
+            "payload": true
+          }
+        }
+      ]
+    }
+  }
+}
