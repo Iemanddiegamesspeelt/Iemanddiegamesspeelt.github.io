@@ -1,5 +1,5 @@
 import 'server-only';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
 
 declare global {
@@ -19,5 +19,4 @@ export function getPrisma(): PrismaClient | null {
   globalThis.macroHubPrisma = client;
   return client;
 }
-
 

@@ -1,5 +1,5 @@
 import 'server-only';
-import type { Prisma, Profile, User } from '@prisma/client';
+import type { Prisma, Profile, User } from '../generated/prisma/client';
 import { getPrisma } from '../db/prisma';
 import { sha256Hex } from '../replay/schema';
 

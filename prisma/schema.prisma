@@ -1,6 +1,9 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "client"
+  provider     = "prisma-client"
+  output       = "../lib/generated/prisma"
+  engineType   = "client"
+  runtime      = "workerd"
+  moduleFormat = "esm"
 }
 
 datasource db {
@@ -152,17 +155,17 @@ enum ModerationActionType {
 }
 
 model User {
-  id                String     @id @default(uuid()) @db.Uuid
-  authProvider      String     @default("chatgpt") @db.VarChar(32)
-  authSubject       String     @db.VarChar(191)
-  email             String     @db.VarChar(320)
-  emailNormalized   String     @unique @db.VarChar(320)
-  role              UserRole   @default(USER)
-  state             UserState  @default(ACTIVE)
-  bannedUntil       DateTime?  @db.Timestamptz(3)
-  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime   @updatedAt @db.Timestamptz(3)
-  deletedAt         DateTime?  @db.Timestamptz(3)
+  id              String    @id @default(uuid()) @db.Uuid
+  authProvider    String    @default("chatgpt") @db.VarChar(32)
+  authSubject     String    @db.VarChar(191)
+  email           String    @db.VarChar(320)
+  emailNormalized String    @unique @db.VarChar(320)
+  role            UserRole  @default(USER)
+  state           UserState @default(ACTIVE)
+  bannedUntil     DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt       DateTime? @db.Timestamptz(3)
 
   profile                   Profile?
   macros                    Macro[]
@@ -170,12 +173,12 @@ model User {
   comments                  Comment[]
   collections               Collection[]
   downloads                 Download[]
-  macroReports              MacroReport[]       @relation("ReporterReports")
-  reviewedMacroReports      MacroReport[]       @relation("ReviewedReports")
-  commentReports            CommentReport[]     @relation("CommentReporter")
-  moderationActions         ModerationAction[]  @relation("ModeratorActions")
-  moderationActionsReceived ModerationAction[]  @relation("TargetUserActions")
-  moderationReversions      ModerationAction[]  @relation("RevertedActions")
+  macroReports              MacroReport[]      @relation("ReporterReports")
+  reviewedMacroReports      MacroReport[]      @relation("ReviewedReports")
+  commentReports            CommentReport[]    @relation("CommentReporter")
+  moderationActions         ModerationAction[] @relation("ModeratorActions")
+  moderationActionsReceived ModerationAction[] @relation("TargetUserActions")
+  moderationReversions      ModerationAction[] @relation("RevertedActions")
 
   @@unique([authProvider, authSubject])
   @@index([role, state])
@@ -232,37 +235,37 @@ model Level {
 }
 
 model Macro {
-  id                       String              @id @default(uuid()) @db.Uuid
-  levelId                  String              @db.Uuid
-  uploaderId               String              @db.Uuid
-  originalFormatId         String              @db.Uuid
-  sourceUploadId           String              @unique @db.Uuid
-  title                    String              @db.VarChar(140)
-  titleNormalized          String              @db.VarChar(140)
-  description              String?             @db.VarChar(4000)
-  completionBasisPoints    Int?
-  tps                      Decimal?            @db.Decimal(10, 3)
-  fps                      Decimal?            @db.Decimal(10, 3)
-  inputCount               Int
-  durationMs               Int
-  player1InputCount        Int
-  player2InputCount        Int                 @default(0)
-  recordedGdVersion        String?             @db.VarChar(32)
-  workingStatus            MacroWorkingStatus  @default(UNVERIFIED)
-  publicationState         PublicationState    @default(DRAFT)
-  canonicalHash            String              @db.Char(64)
-  downloadCount            Int                 @default(0)
-  likeCount                Int                 @default(0)
-  commentCount             Int                 @default(0)
-  publishedAt              DateTime?           @db.Timestamptz(3)
-  isDemo                   Boolean             @default(false)
-  createdAt                DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt                DateTime            @updatedAt @db.Timestamptz(3)
-  deletedAt                DateTime?           @db.Timestamptz(3)
+  id                    String             @id @default(uuid()) @db.Uuid
+  levelId               String             @db.Uuid
+  uploaderId            String             @db.Uuid
+  originalFormatId      String             @db.Uuid
+  sourceUploadId        String             @unique @db.Uuid
+  title                 String             @db.VarChar(140)
+  titleNormalized       String             @db.VarChar(140)
+  description           String?            @db.VarChar(4000)
+  completionBasisPoints Int?
+  tps                   Decimal?           @db.Decimal(10, 3)
+  fps                   Decimal?           @db.Decimal(10, 3)
+  inputCount            Int
+  durationMs            Int
+  player1InputCount     Int
+  player2InputCount     Int                @default(0)
+  recordedGdVersion     String?            @db.VarChar(32)
+  workingStatus         MacroWorkingStatus @default(UNVERIFIED)
+  publicationState      PublicationState   @default(DRAFT)
+  canonicalHash         String             @db.Char(64)
+  downloadCount         Int                @default(0)
+  likeCount             Int                @default(0)
+  commentCount          Int                @default(0)
+  publishedAt           DateTime?          @db.Timestamptz(3)
+  isDemo                Boolean            @default(false)
+  createdAt             DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime           @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?          @db.Timestamptz(3)
 
-  level                  Level                        @relation(fields: [levelId], references: [id], onDelete: Restrict)
-  uploader               User                         @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
-  originalFormat         MacroFormat                  @relation(fields: [originalFormatId], references: [id], onDelete: Restrict)
+  level                  Level                       @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  uploader               User                        @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  originalFormat         MacroFormat                 @relation(fields: [originalFormatId], references: [id], onDelete: Restrict)
   canonicalReplay        MacroCanonicalReplay?
   files                  MacroFile[]
   conversionCapabilities MacroConversionCapability[]
@@ -335,26 +338,26 @@ model MacroFormat {
   createdAt            DateTime                   @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime                   @updatedAt @db.Timestamptz(3)
 
-  macros                  Macro[]
-  files                   MacroFile[]
-  toolCompatibility       FormatToolCompatibility[]
-  conversionCapabilities  MacroConversionCapability[]
-  downloads               Download[]
-  moderationActions       ModerationAction[]
+  macros                 Macro[]
+  files                  MacroFile[]
+  toolCompatibility      FormatToolCompatibility[]
+  conversionCapabilities MacroConversionCapability[]
+  downloads              Download[]
+  moderationActions      ModerationAction[]
 
   @@index([enabled, sortOrder])
 }
 
 model ReplayTool {
-  id                String                     @id @default(uuid()) @db.Uuid
-  slug              String                     @unique @db.VarChar(64)
-  name              String                     @db.VarChar(80)
-  websiteUrl        String?                    @db.VarChar(512)
-  iconStorageKey    String?                    @db.VarChar(512)
-  status            ToolStatus                @default(ACTIVE)
-  currentVersion    String?                    @db.VarChar(64)
-  createdAt         DateTime                   @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime                   @updatedAt @db.Timestamptz(3)
+  id             String     @id @default(uuid()) @db.Uuid
+  slug           String     @unique @db.VarChar(64)
+  name           String     @db.VarChar(80)
+  websiteUrl     String?    @db.VarChar(512)
+  iconStorageKey String?    @db.VarChar(512)
+  status         ToolStatus @default(ACTIVE)
+  currentVersion String?    @db.VarChar(64)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
 
   formatCompatibility FormatToolCompatibility[]
   downloads           Download[]
@@ -364,20 +367,20 @@ model ReplayTool {
 }
 
 model FormatToolCompatibility {
-  formatId         String                 @db.Uuid
-  replayToolId     String                 @db.Uuid
-  direction        CompatibilityDirection @default(IMPORT)
-  supportLevel     CompatibilitySupport  @default(COMPATIBLE)
-  verification     String                @default("unknown") @db.VarChar(32)
-  canRead          Boolean               @default(true)
-  canWrite         Boolean               @default(false)
-  recommended      Boolean               @default(false)
-  minToolVersion   String?               @db.VarChar(64)
-  maxToolVersion   String?               @db.VarChar(64)
-  warning          String?               @db.VarChar(500)
-  verifiedAt       DateTime?             @db.Timestamptz(3)
-  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime              @updatedAt @db.Timestamptz(3)
+  formatId       String                 @db.Uuid
+  replayToolId   String                 @db.Uuid
+  direction      CompatibilityDirection @default(IMPORT)
+  supportLevel   CompatibilitySupport   @default(COMPATIBLE)
+  verification   String                 @default("unknown") @db.VarChar(32)
+  canRead        Boolean                @default(true)
+  canWrite       Boolean                @default(false)
+  recommended    Boolean                @default(false)
+  minToolVersion String?                @db.VarChar(64)
+  maxToolVersion String?                @db.VarChar(64)
+  warning        String?                @db.VarChar(500)
+  verifiedAt     DateTime?              @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime               @updatedAt @db.Timestamptz(3)
 
   format     MacroFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
   replayTool ReplayTool  @relation(fields: [replayToolId], references: [id], onDelete: Cascade)
@@ -387,14 +390,14 @@ model FormatToolCompatibility {
 }
 
 model MacroConversionCapability {
-  macroId        String            @db.Uuid
-  formatId       String            @db.Uuid
-  quality        ConversionQuality
-  warningCodes   String[]
-  details        Json?
-  canonicalHash  String            @db.Char(64)
-  exporterVersion String           @db.VarChar(64)
-  checkedAt      DateTime          @default(now()) @db.Timestamptz(3)
+  macroId         String            @db.Uuid
+  formatId        String            @db.Uuid
+  quality         ConversionQuality
+  warningCodes    String[]
+  details         Json?
+  canonicalHash   String            @db.Char(64)
+  exporterVersion String            @db.VarChar(64)
+  checkedAt       DateTime          @default(now()) @db.Timestamptz(3)
 
   macro  Macro       @relation(fields: [macroId], references: [id], onDelete: Cascade)
   format MacroFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)

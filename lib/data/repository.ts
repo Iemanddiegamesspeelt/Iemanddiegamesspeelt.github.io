@@ -6,7 +6,7 @@ import {
   type MacroFormat,
   type Profile,
   type User,
-} from '@prisma/client';
+} from '../generated/prisma/client';
 import { getPrisma } from '../db/prisma';
 import { getObjectStorage } from '../storage/object-storage';
 import { sha256Hex, validateCanonicalReplay } from '../replay/schema';

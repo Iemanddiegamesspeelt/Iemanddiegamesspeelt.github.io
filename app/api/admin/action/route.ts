@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../../../../lib/generated/prisma/client';
 import { requireModeratorApi } from '../../../../lib/auth/moderation';
 import { jsonError, readJsonBody } from '../../../../lib/security/request';
 
