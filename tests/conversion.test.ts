@@ -101,11 +101,12 @@ test('blocks unknown tools unless the server resolves a live compatibility polic
   assert.ok(resolved.issues.some((issue) => issue.code === 'COMPATIBILITY_NOT_VERIFIED'));
 });
 
-test('recognizes catalogued extensions without pretending they are parseable', async () => {
+test('recognizes malformed catalogued files without pretending they parsed', async () => {
   const detection = await detectReplayFormat({ bytes: new Uint8Array([1, 2, 3]), filename: 'example.xd' });
   assert.equal(detection.format?.id, 'xdbot');
   assert.equal(detection.confidence, 'possible');
-  assert.equal(detection.format?.parser, undefined);
+  assert.ok(detection.format?.parser);
+  await assert.rejects(() => detection.format!.parser!.parse({ bytes: new Uint8Array([1, 2, 3]), filename: 'example.xd' }));
 });
 
 test('rejects non-JSON numeric extension values', async () => {

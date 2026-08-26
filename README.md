@@ -81,8 +81,9 @@ Implemented codecs:
 
 - `.gdr2` version 2 import/export, verified against CC0 Eclipse replay fixtures
 - `.macrohub.json` canonical version 1 import/export
+- strict importers for `.gdr`, `.gdr.json`, `.mhr`, `.mhr.json`, `.cml`, SLC v1-v3, `.xbot`, `.xd`, Echo binary/JSON, ReplayBot v2, OmegaBot v2, `.ybot`, TASBot JSON, `.rsh`, `.kd`, `.zbf`, `.freplay`, TCM v1/v2, `.thyst`, modern/GDMO 2.2 `.macro`, and `.re3`
 
-The registry also contains GDR, GDR JSON, MHR, CML, SLC, xdBot/XDBot, Echo, ReplayBot, yBot, OmegaBot, TASBot, Rush, KD-Bot, zBot, Fembot, TCBot, Amethyst, GDMO, and ReplayEngine entries. Entries without a verified specification remain non-exportable; MacroHub never emits placeholder or invented replay files.
+Import support and export support are intentionally separate. A source format can be parsed and uploaded without being offered as a generated download. Formats without a verified exporter remain non-exportable; MacroHub never emits placeholder or invented replay files.
 
 The canonical format is documented by `schemas/macrohub-replay-v1.schema.json`. New codecs implement `MacroParser`, `MacroExporter`, and `MacroFormatDefinition`, then add explicit tool compatibility records separately.
 
@@ -128,4 +129,4 @@ npm test
 npm run build
 ```
 
-The conversion suite includes a real Eclipse `.gdr2` fixture, byte-identical round trips, canonical JSON conversion, loss warnings, hard conversion blocks, tool-policy resolution, and planned-format fail-closed checks.
+The conversion suite includes a real Eclipse `.gdr2` fixture, byte-identical round trips, canonical JSON conversion, loss warnings, hard conversion blocks, tool-policy resolution, strict fixtures for every registered source family, malformed-input rejection, and sign-in return-path regression coverage.

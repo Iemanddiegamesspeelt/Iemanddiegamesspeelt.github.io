@@ -8,6 +8,7 @@ const APP_LOGIN_START_PATH = '/auth/session/start';
 const APP_LOGIN_COMPLETE_PATH = '/auth/session/complete';
 const APP_LOGOUT_PATH = '/auth/session/end';
 const PLATFORM_SIGN_IN_PATH = '/signin-with-chatgpt';
+const PLATFORM_SIGN_OUT_PATH = '/signout-with-chatgpt';
 
 export function appSignInPath(returnTo: string): string {
   return `${APP_LOGIN_START_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
@@ -18,7 +19,11 @@ export function appSignOutPath(returnTo = '/'): string {
 }
 
 export function platformSignInPath(returnTo: string): string {
-  return `${PLATFORM_SIGN_IN_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
+  return `${PLATFORM_SIGN_IN_PATH}?return_to=${encodeURIComponent(safePlatformReturnPath(returnTo))}`;
+}
+
+export function platformSignOutPath(returnTo = '/'): string {
+  return `${PLATFORM_SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
 export function appLoginCompletePath(returnTo: string, state: string): string {
@@ -45,7 +50,20 @@ export function safeRelativeReturnPath(value: string | null | undefined): string
 
 function isReservedAuthPath(pathname: string): boolean {
   return pathname === PLATFORM_SIGN_IN_PATH
-    || pathname === '/signout-with-chatgpt'
+    || pathname === PLATFORM_SIGN_OUT_PATH
     || pathname === '/callback'
     || pathname.startsWith('/auth/session/');
+}
+
+function safePlatformReturnPath(value: string): string {
+  if (!value.startsWith('/') || value.startsWith('//')) return '/';
+  try {
+    const url = new URL(value, 'https://app.local');
+    if (url.origin === 'https://app.local' && url.pathname === APP_LOGIN_COMPLETE_PATH) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return '/';
+  }
+  return safeRelativeReturnPath(value);
 }
