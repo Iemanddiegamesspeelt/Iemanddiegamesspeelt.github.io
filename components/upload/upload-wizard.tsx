@@ -24,7 +24,15 @@ type UploadAnalysis = {
   };
 };
 
-export function UploadWizard({ signedIn }: { signedIn: boolean }) {
+export function UploadWizard({
+  signedIn,
+  acceptedFileTypes,
+  initialFile = null,
+}: {
+  signedIn: boolean;
+  acceptedFileTypes: string;
+  initialFile?: File | null;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const levelNameRef = useRef<HTMLInputElement>(null);
   const creatorNameRef = useRef<HTMLInputElement>(null);
@@ -33,6 +41,7 @@ export function UploadWizard({ signedIn }: { signedIn: boolean }) {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [publishedId, setPublishedId] = useState('');
+  const initialFileHandled = useRef(false);
 
   const lookupLevel = useCallback(async (levelId: string) => {
     if (!/^\d{1,20}$/.test(levelId)) return;
@@ -51,7 +60,7 @@ export function UploadWizard({ signedIn }: { signedIn: boolean }) {
     if (analysis?.analysis.levelId) void lookupLevel(analysis.analysis.levelId);
   }, [analysis?.analysis.levelId, lookupLevel]);
 
-  async function analyze(file: File) {
+  const analyze = useCallback(async (file: File) => {
     setBusy(true);
     setError('');
     setPublishedId('');
@@ -68,7 +77,13 @@ export function UploadWizard({ signedIn }: { signedIn: boolean }) {
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!initialFile || initialFileHandled.current) return;
+    initialFileHandled.current = true;
+    void analyze(initialFile);
+  }, [analyze, initialFile]);
 
   async function publish(form: FormData) {
     if (!analysis?.uploadId) return;
@@ -128,7 +143,7 @@ export function UploadWizard({ signedIn }: { signedIn: boolean }) {
             <h2 className="mt-5 text-xl font-semibold">Drop your macro here</h2>
             <p className="mt-2 text-sm text-zinc-500">Choose a supported macro file up to 10 MiB.</p>
             <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="mt-6 rounded-xl bg-violet-500 px-5 py-3 text-xs font-semibold hover:bg-violet-400 disabled:opacity-50">Choose a file</button>
-            <input ref={inputRef} className="sr-only" type="file" accept=".gdr2,.macrohub.json,application/json,application/octet-stream" onChange={(event) => {
+            <input ref={inputRef} className="sr-only" type="file" accept={acceptedFileTypes} onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void analyze(file);
             }} />

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   ChevronRight,
   Download,
@@ -13,9 +14,13 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react';
+import Link from '../ui/native-link';
 import { MacroTimeline, type TimelineEvent } from '../macro/macro-timeline';
+import { UploadWizard } from '../upload/upload-wizard';
+import { appSignInPath } from '../../lib/auth/session';
 
 type Issue = {
   code: string;
@@ -57,8 +62,12 @@ type Analysis = {
 
 export function ConverterWorkspace({
   tools,
+  signedIn,
+  acceptedFileTypes,
 }: {
   tools: Array<{ id: string; label: string }>;
+  signedIn: boolean;
+  acceptedFileTypes: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +79,7 @@ export function ConverterWorkspace({
   const [busy, setBusy] = useState(false);
   const [converting, setConverting] = useState<'single' | 'all' | null>(null);
   const [error, setError] = useState('');
+  const [publishMode, setPublishMode] = useState(false);
   const target = analysis?.analysis.targets.find((item) => item.id === selectedTarget);
   const selectedCompatibility = target?.toolCompatibility.find((item) => item.toolId === selectedTool);
   const warningCodes = useMemo(
@@ -80,13 +90,17 @@ export function ConverterWorkspace({
     () => analysis?.analysis.targets.filter((item) => !selectedTool || item.compatibleToolIds.includes(selectedTool)) ?? [],
     [analysis, selectedTool],
   );
+  const availableVisibleTargets = useMemo(
+    () => visibleTargets.filter((item) => item.available),
+    [visibleTargets],
+  );
   const allWarnings = useMemo(() => {
     const unique = new Map<string, Issue>();
-    for (const item of visibleTargets) {
+    for (const item of availableVisibleTargets) {
       for (const issue of item.issues) if (issue.requiresAcknowledgement) unique.set(issue.code, issue);
     }
     return [...unique.values()];
-  }, [visibleTargets]);
+  }, [availableVisibleTargets]);
   const visibleTools = useMemo(
     () => tools.filter((tool) => analysis?.analysis.targets.some((item) => item.compatibleToolIds.includes(tool.id))),
     [analysis, tools],
@@ -108,7 +122,7 @@ export function ConverterWorkspace({
       const data = await response.json() as Analysis & { error?: { message?: string } };
       if (!response.ok) throw new Error(data.error?.message ?? 'Macro analysis failed.');
       setAnalysis(data);
-      setSelectedTarget(data.analysis.targets[0]?.id ?? '');
+      setSelectedTarget(data.analysis.targets.find((item) => item.available)?.id ?? data.analysis.targets[0]?.id ?? '');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Macro analysis failed.');
     } finally {
@@ -151,6 +165,17 @@ export function ConverterWorkspace({
 
   const needsAcknowledgement = warningCodes.length > 0;
 
+  if (publishMode && file) {
+    return (
+      <div className="space-y-5">
+        <button type="button" onClick={() => setPublishMode(false)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[.08] px-4 text-xs text-zinc-300 hover:bg-white/[.05]">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to converter
+        </button>
+        <UploadWizard signedIn={signedIn} acceptedFileTypes={acceptedFileTypes} initialFile={file} />
+      </div>
+    );
+  }
+
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
@@ -174,7 +199,7 @@ export function ConverterWorkspace({
               <button type="button" disabled={busy} onClick={() => inputRef.current?.click()} className="mt-6 rounded-xl bg-violet-500 px-5 py-3 text-xs font-semibold transition hover:bg-violet-400 disabled:opacity-50">
                 Choose a file
               </button>
-              <input ref={inputRef} type="file" className="sr-only" accept=".gdr2,.macrohub.json,application/json,application/octet-stream" onChange={(event) => {
+              <input ref={inputRef} type="file" className="sr-only" accept={acceptedFileTypes} onChange={(event) => {
                 const selected = event.target.files?.[0];
                 if (selected) void chooseFile(selected);
               }} />
@@ -218,11 +243,11 @@ export function ConverterWorkspace({
                     type="button"
                     key={item.id}
                     onClick={() => { setSelectedTarget(item.id); setAcknowledged(false); }}
-                    className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${selectedTarget === item.id ? 'border-violet-400/35 bg-violet-400/[.09]' : 'border-white/[.07] bg-white/[.025] hover:border-white/[.13]'}`}
+                    className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${selectedTarget === item.id ? 'border-violet-400/35 bg-violet-400/[.09]' : item.available ? 'border-white/[.07] bg-white/[.025] hover:border-white/[.13]' : 'border-white/[.05] bg-white/[.015] opacity-60 hover:opacity-80'}`}
                   >
                     <span>
                       <span className="block text-sm font-semibold">{item.name}</span>
-                      <span className="mt-1 block text-[11px] text-zinc-500">{item.extension} · {item.fidelity === 'lossless' ? 'Lossless' : item.fidelity === 'metadata-loss' ? 'Metadata warning' : 'Compatible'}</span>
+                      <span className="mt-1 block text-[11px] text-zinc-500">{item.extension} · {!item.available ? 'Unavailable for this replay' : item.fidelity === 'lossless' ? 'Lossless' : item.fidelity === 'metadata-loss' ? 'Metadata warning' : 'Compatible'}</span>
                     </span>
                     {selectedTarget === item.id ? <Check className="h-4 w-4 text-violet-300" /> : <ChevronRight className="h-4 w-4 text-zinc-700" />}
                   </button>
@@ -255,9 +280,9 @@ export function ConverterWorkspace({
               <select value={selectedTool} onChange={(event) => {
                 const toolId = event.target.value;
                 setSelectedTool(toolId);
-                const firstMatch = analysis.analysis.targets.find((item) => !toolId || item.compatibleToolIds.includes(toolId));
-                if (firstMatch && !firstMatch.compatibleToolIds.includes(toolId)) setSelectedTarget(firstMatch.id);
-                else if (toolId && !target?.compatibleToolIds.includes(toolId)) setSelectedTarget(firstMatch?.id ?? '');
+                const matches = analysis.analysis.targets.filter((item) => !toolId || item.compatibleToolIds.includes(toolId));
+                const firstMatch = matches.find((item) => item.available) ?? matches[0];
+                if (toolId && (!target?.compatibleToolIds.includes(toolId) || !target.available)) setSelectedTarget(firstMatch?.id ?? '');
                 setAcknowledged(false);
                 setAcknowledgedAll(false);
               }} className="h-11 w-full rounded-xl border border-white/[.075] bg-[#11151d] px-3 text-xs text-zinc-300 outline-none">
@@ -293,7 +318,7 @@ export function ConverterWorkspace({
               </label>
             )}
 
-            <button type="button" disabled={!selectedTarget || converting !== null || (needsAcknowledgement && !acknowledged)} onClick={() => void convert(false)} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 text-xs font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" disabled={!selectedTarget || !target?.available || converting !== null || (needsAcknowledgement && !acknowledged)} onClick={() => void convert(false)} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 text-xs font-semibold transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40">
               {converting === 'single' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Convert &amp; download
             </button>
@@ -303,11 +328,20 @@ export function ConverterWorkspace({
                 Include every visible format and accept each listed conversion note.
               </label>
             )}
-            <p className="mt-4 text-[10px] text-zinc-600">ZIP contents: {visibleTargets.map((item) => item.extension).join(', ')}</p>
-            <button type="button" disabled={converting !== null || (allWarnings.length > 0 && !acknowledgedAll)} onClick={() => void convert(true)} className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[.08] bg-white/[.035] text-xs font-semibold text-zinc-300 transition hover:bg-white/[.07] disabled:opacity-40">
+            <p className="mt-4 text-[10px] text-zinc-600">ZIP contents: {availableVisibleTargets.map((item) => item.extension).join(', ') || 'No compatible outputs'}</p>
+            <button type="button" disabled={!availableVisibleTargets.length || converting !== null || (allWarnings.length > 0 && !acknowledgedAll)} onClick={() => void convert(true)} className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[.08] bg-white/[.035] text-xs font-semibold text-zinc-300 transition hover:bg-white/[.07] disabled:opacity-40">
               {converting === 'all' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <PackageOpen className="h-4 w-4" />}
               Download all formats
             </button>
+            {signedIn ? (
+              <button type="button" onClick={() => setPublishMode(true)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-violet-400/20 bg-violet-400/[.07] text-xs font-semibold text-violet-200 transition hover:bg-violet-400/[.12]">
+                <Upload className="h-4 w-4" /> Publish this macro
+              </button>
+            ) : (
+              <Link href={appSignInPath('/upload')} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-violet-400/20 bg-violet-400/[.07] text-xs font-semibold text-violet-200 transition hover:bg-violet-400/[.12]">
+                <Upload className="h-4 w-4" /> Sign in to upload
+              </Link>
+            )}
           </>
         )}
       </aside>

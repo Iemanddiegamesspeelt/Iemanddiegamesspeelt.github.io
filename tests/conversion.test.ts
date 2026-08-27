@@ -8,6 +8,7 @@ import {
 } from '../lib/replay/conversion';
 import { gdr2Exporter, gdr2Parser } from '../lib/replay/formats/gdr2';
 import { macroHubJsonParser } from '../lib/replay/formats/macrohub-json';
+import { formatRegistry } from '../lib/replay/registry';
 import { validateCanonicalReplay } from '../lib/replay/schema';
 
 // CC0 replay fixture from the Eclipse community macro repository.
@@ -50,13 +51,19 @@ test('converts GDR2 through the canonical representation to MacroHub JSON', asyn
   assert.deepEqual(reparsed.replay, replay);
 });
 
-test('only exposes exporters that can safely generate this replay', async () => {
+test('converts the real fixture through every registered exporter', async () => {
   const replay = await parsedFixture();
   const available = listAvailableExports(replay).map(({ format }) => format.id).sort();
-  assert.deepEqual(available, ['gdr2', 'macrohub-json']);
-  const planned = assessConversion(replay, 'gdr');
-  assert.equal(planned.decision, 'blocked');
-  assert.equal(planned.issues[0]?.code, 'EXPORTER_NOT_IMPLEMENTED');
+  const exporters = formatRegistry.filter((format) => format.exporter).map((format) => format.id).sort();
+  assert.deepEqual(available, exporters);
+  for (const target of listAvailableExports(replay)) {
+    assert.equal(target.assessment.decision, 'allowed');
+    const acknowledgedIssueCodes = target.assessment.decision === 'allowed'
+      ? target.assessment.issues.filter((issue) => issue.requiresAcknowledgement).map((issue) => issue.code)
+      : [];
+    const converted = await convertReplay(replay, target.format.id, { acknowledgedIssueCodes });
+    assert.ok(converted.artifact.bytes.byteLength > 0, `${target.format.displayName} output was empty`);
+  }
 });
 
 test('requires acknowledgement when optional metadata is removed', async () => {

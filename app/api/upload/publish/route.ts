@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getChatGPTUser } from '../../../chatgpt-auth';
-import { AccountAccessError, ensureAppUser } from '../../../../lib/auth/app-user';
+import { AccountAccessError, ensurePersistentUser } from '../../../../lib/auth/app-user';
+import { findD1MacroByUploadId, publishD1Macro } from '../../../../lib/db/d1';
 import { getPrisma } from '../../../../lib/db/prisma';
 import { analyzeReplay } from '../../../../lib/replay/analyze';
 import { getFormat } from '../../../../lib/replay/registry';
@@ -53,7 +54,6 @@ export async function POST(request: Request) {
   const identity = await getChatGPTUser();
   if (!identity) return jsonError('AUTH_REQUIRED', 'Sign in to publish a macro.', 401);
   const prisma = getPrisma();
-  if (!prisma) return jsonError('DATABASE_UNAVAILABLE', 'Publishing is not available right now.', 503);
 
   let input: z.infer<typeof publishInput>;
   const body = await readJsonBody(request);
@@ -67,15 +67,17 @@ export async function POST(request: Request) {
   const storage = getObjectStorage();
   let appUser;
   try {
-    appUser = await ensureAppUser(identity);
+    appUser = await ensurePersistentUser(identity);
   } catch (error) {
     if (error instanceof AccountAccessError) return jsonError('ACCOUNT_RESTRICTED', error.message, 403);
     return jsonError('DATABASE_UNAVAILABLE', 'Publishing is not available right now.', 503);
   }
-  const alreadyPublished = await prisma.macro.findUnique({
-    where: { sourceUploadId: input.uploadId },
-    select: { id: true, uploaderId: true },
-  });
+  const alreadyPublished = prisma
+    ? await prisma.macro.findUnique({
+        where: { sourceUploadId: input.uploadId },
+        select: { id: true, uploaderId: true },
+      })
+    : await findD1MacroByUploadId(input.uploadId);
   if (alreadyPublished) {
     if (alreadyPublished.uploaderId !== appUser.id) return jsonError('UPLOAD_FORBIDDEN', 'This upload belongs to another account.', 403);
     return Response.json({ macro: { id: alreadyPublished.id } });
@@ -125,7 +127,7 @@ export async function POST(request: Request) {
     try {
       trustedLevel = await getGeometryDashLevelProvider().getLevel(input.levelId);
     } catch {
-      return jsonError('LEVEL_PROVIDER_UNAVAILABLE', 'Level metadata is unavailable right now.', 503);
+      // The uploader-provided fields remain usable when the replaceable metadata provider is offline.
     }
     const levelName = trustedLevel?.name ?? input.levelName;
     const creatorName = trustedLevel?.creator ?? input.creatorName;
@@ -151,6 +153,55 @@ export async function POST(request: Request) {
         storage.delete(originalStorageKey),
       ]);
       throw failedReadyWrite.reason;
+    }
+
+    if (!prisma) {
+      try {
+        const macro = await publishD1Macro({
+          uploadId: input.uploadId,
+          userId: appUser.id,
+          level: {
+            id: input.levelId,
+            name: levelName,
+            creator: creatorName,
+            difficulty,
+            demonDifficulty: demonDifficulty ?? null,
+            stars: trustedLevel?.stars ?? null,
+            length,
+            gdVersion: trustedLevel?.geometryDashVersion ?? null,
+          },
+          macro: {
+            title: input.title,
+            description: input.description,
+            completion: analysis.completionPercent,
+            rateKind: analysis.rateKind,
+            rate: analysis.rate,
+            inputCount: analysis.inputCount,
+            durationSeconds,
+            player1Inputs: analysis.player1Inputs,
+            player2Inputs: analysis.player2Inputs,
+            recordedGdVersion: analysis.geometryDashVersion,
+            originalFormatId: format.id,
+            canonicalHash,
+            canonicalStorageKey,
+            originalStorageKey,
+            availableFormatIds: analysis.targets
+              .filter((target) => target.fidelity && getFormat(target.id)?.exporter)
+              .map((target) => target.id),
+          },
+        });
+        await Promise.allSettled([
+          storage.delete(manifest.originalKey),
+          storage.delete(manifest.canonicalKey),
+          storage.delete(manifestKey),
+        ]);
+        return Response.json({ macro }, { status: 201, headers: rateLimitHeaders(publishLimit) });
+      } catch (error) {
+        const published = await findD1MacroByUploadId(input.uploadId);
+        if (published?.uploaderId === appUser.id) return Response.json({ macro: { id: published.id } });
+        await Promise.allSettled([storage.delete(canonicalStorageKey), storage.delete(originalStorageKey)]);
+        throw error;
+      }
     }
 
     let macro: { id: string };
@@ -331,10 +382,12 @@ export async function POST(request: Request) {
     ]);
     return Response.json({ macro: { id: macro.id } }, { status: 201, headers: rateLimitHeaders(publishLimit) });
   } catch (error) {
-    const published = await prisma.macro.findUnique({
-      where: { sourceUploadId: input.uploadId },
-      select: { id: true, uploaderId: true },
-    });
+    const published = prisma
+      ? await prisma.macro.findUnique({
+          where: { sourceUploadId: input.uploadId },
+          select: { id: true, uploaderId: true },
+        })
+      : await findD1MacroByUploadId(input.uploadId);
     if (published?.uploaderId === appUser.id) return Response.json({ macro: { id: published.id } });
     const publicMessages = new Set([
       'Replay duration cannot be represented safely.',

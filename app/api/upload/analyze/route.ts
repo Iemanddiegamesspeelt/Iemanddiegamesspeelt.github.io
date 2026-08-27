@@ -1,5 +1,5 @@
 import { getChatGPTUser } from '../../../chatgpt-auth';
-import { AccountAccessError, ensureAppUser } from '../../../../lib/auth/app-user';
+import { AccountAccessError, ensurePersistentUser } from '../../../../lib/auth/app-user';
 import { analyzeReplay } from '../../../../lib/replay/analyze';
 import { detectReplayFormat } from '../../../../lib/replay/conversion';
 import { stableStringify } from '../../../../lib/replay/schema';
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (user) {
     try {
-      await ensureAppUser(user);
+      await ensurePersistentUser(user);
     } catch (error) {
       if (error instanceof AccountAccessError) return jsonError('ACCOUNT_RESTRICTED', error.message, 403);
       return jsonError('DATABASE_UNAVAILABLE', 'Uploads are not available right now.', 503);

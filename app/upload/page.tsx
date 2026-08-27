@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { UploadWizard } from '../../components/upload/upload-wizard';
 import { getChatGPTUser } from '../chatgpt-auth';
+import { formatRegistry } from '../../lib/replay/registry';
 
 export const metadata: Metadata = {
   title: 'Upload',
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 
 export default async function UploadPage() {
   const user = await getChatGPTUser();
+  const acceptedFileTypes = [...new Set(formatRegistry.flatMap((format) => format.extensions))].join(',');
   return (
     <main className="mx-auto min-h-[75vh] max-w-6xl px-5 py-12 lg:px-8">
       <header className="mb-9 max-w-3xl">
@@ -16,7 +18,7 @@ export default async function UploadPage() {
         <h1 className="mt-3 text-4xl font-semibold tracking-[-.045em] sm:text-5xl">Upload once</h1>
         <p className="mt-3 text-sm leading-6 text-zinc-500">Add a macro file, check its details, and publish it to the community.</p>
       </header>
-      <UploadWizard signedIn={Boolean(user)} />
+      <UploadWizard signedIn={Boolean(user)} acceptedFileTypes={acceptedFileTypes} />
     </main>
   );
 }

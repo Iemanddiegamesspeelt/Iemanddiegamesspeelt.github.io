@@ -8,6 +8,17 @@ import {
   type User,
 } from '../generated/prisma/client';
 import { getPrisma } from '../db/prisma';
+import {
+  findD1Level,
+  findD1Macro,
+  findD1Profile,
+  getD1,
+  listD1Levels,
+  listD1Macros,
+  listD1MacrosForLevel,
+  listD1MacrosForProfile,
+  listD1Profiles,
+} from '../db/d1';
 import { getObjectStorage } from '../storage/object-storage';
 import { sha256Hex, validateCanonicalReplay } from '../replay/schema';
 import { getFormat } from '../replay/registry';
@@ -181,6 +192,10 @@ export async function browseLevelRecords(filters: BrowseFilters) {
   const prisma = getPrisma();
   if (!prisma) {
     const { browseLevels } = await import('./search');
+    if (getD1()) {
+      const [levels, macros, profiles] = await Promise.all([listD1Levels(), listD1Macros(), listD1Profiles()]);
+      return browseLevels(filters, { levels, macros, profiles });
+    }
     return browseLevels(filters, { levels: demoLevels, macros: demoMacros, profiles: demoProfiles });
   }
   const pageSize = Math.min(Math.max(filters.pageSize ?? 12, 1), 24);
@@ -293,14 +308,14 @@ const macroInclude = {
 
 export async function listLevelRecords(): Promise<LevelRecord[]> {
   const prisma = getPrisma();
-  if (!prisma) return demoLevels;
+  if (!prisma) return getD1() ? listD1Levels() : demoLevels;
   const rows = await prisma.level.findMany({ orderBy: { totalDownloads: 'desc' }, take: 100 });
   return rows.map(mapLevel);
 }
 
 export async function findLevelRecord(externalId: string): Promise<LevelRecord | undefined> {
   const prisma = getPrisma();
-  if (!prisma) return getDemoLevel(externalId);
+  if (!prisma) return getD1() ? findD1Level(externalId) : getDemoLevel(externalId);
   const row = await prisma.level.findUnique({
     where: { providerKey_externalId: { providerKey: 'geometry-dash', externalId } },
   });
@@ -309,7 +324,7 @@ export async function findLevelRecord(externalId: string): Promise<LevelRecord |
 
 export async function listMacroRecords(): Promise<MacroRecord[]> {
   const prisma = getPrisma();
-  if (!prisma) return demoMacros;
+  if (!prisma) return getD1() ? listD1Macros() : demoMacros;
   const rows = await prisma.macro.findMany({
     where: { publicationState: 'PUBLISHED' },
     include: macroInclude,
@@ -321,7 +336,7 @@ export async function listMacroRecords(): Promise<MacroRecord[]> {
 
 export async function listMacroRecordsForLevel(externalLevelId: string): Promise<MacroRecord[]> {
   const prisma = getPrisma();
-  if (!prisma) return getDemoMacrosForLevel(externalLevelId);
+  if (!prisma) return getD1() ? listD1MacrosForLevel(externalLevelId) : getDemoMacrosForLevel(externalLevelId);
   const rows = await prisma.macro.findMany({
     where: {
       publicationState: 'PUBLISHED',
@@ -336,7 +351,7 @@ export async function listMacroRecordsForLevel(externalLevelId: string): Promise
 
 export async function findMacroRecord(id: string, withCanonical = false): Promise<MacroRecord | undefined> {
   const prisma = getPrisma();
-  if (!prisma) return getDemoMacro(id);
+  if (!prisma) return getD1() ? findD1Macro(id, withCanonical) : getDemoMacro(id);
   const row = await prisma.macro.findFirst({
     where: { id, publicationState: 'PUBLISHED' },
     include: { ...macroInclude, canonicalReplay: true },
@@ -356,7 +371,7 @@ export async function findMacroRecord(id: string, withCanonical = false): Promis
 
 export async function listMacroRecordsForProfile(userId: string): Promise<MacroRecord[]> {
   const prisma = getPrisma();
-  if (!prisma) return demoMacros.filter((macro) => macro.uploaderId === userId);
+  if (!prisma) return getD1() ? listD1MacrosForProfile(userId) : demoMacros.filter((macro) => macro.uploaderId === userId);
   const rows = await prisma.macro.findMany({
     where: { uploaderId: userId, publicationState: 'PUBLISHED' },
     include: macroInclude,
@@ -460,7 +475,11 @@ export async function listMacroRecordsByIds(ids: string[]): Promise<MacroRecord[
   if (!ids.length) return [];
   const boundedIds = ids.slice(0, 500);
   const prisma = getPrisma();
-  if (!prisma) return demoMacros.filter((macro) => boundedIds.includes(macro.id));
+  if (!prisma) {
+    const records = getD1() ? await listD1Macros() : demoMacros;
+    const order = new Map(boundedIds.map((id, index) => [id, index]));
+    return records.filter((macro) => boundedIds.includes(macro.id)).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  }
   const rows = await prisma.macro.findMany({
     where: { id: { in: boundedIds }, publicationState: 'PUBLISHED' },
     include: macroInclude,
@@ -471,7 +490,7 @@ export async function listMacroRecordsByIds(ids: string[]): Promise<MacroRecord[
 
 export async function findProfileRecord(username: string): Promise<ProfileRecord | undefined> {
   const prisma = getPrisma();
-  if (!prisma) return getDemoProfile(username);
+  if (!prisma) return getD1() ? findD1Profile(username) : getDemoProfile(username);
   const profile = await prisma.profile.findUnique({
     where: { usernameNormalized: username.toLowerCase() },
     include: { user: true },
@@ -481,7 +500,7 @@ export async function findProfileRecord(username: string): Promise<ProfileRecord
 
 export async function listProfileRecords(): Promise<ProfileRecord[]> {
   const prisma = getPrisma();
-  if (!prisma) return demoProfiles;
+  if (!prisma) return getD1() ? listD1Profiles() : demoProfiles;
   const rows = await prisma.user.findMany({
     where: { state: 'ACTIVE' },
     include: { profile: true },
@@ -504,6 +523,10 @@ export async function autocompleteRecords(query: string, limit = 8): Promise<Sea
   const prisma = getPrisma();
   if (!prisma) {
     const { autocomplete } = await import('./search');
+    if (getD1()) {
+      const [levels, macros, profiles] = await Promise.all([listD1Levels(), listD1Macros(), listD1Profiles()]);
+      return autocomplete(normalized, limit, { levels, macros, profiles });
+    }
     return autocomplete(normalized, limit, { levels: demoLevels, macros: demoMacros, profiles: demoProfiles });
   }
   const take = Math.min(Math.max(limit, 1), 12);

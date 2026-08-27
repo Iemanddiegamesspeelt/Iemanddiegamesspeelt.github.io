@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma, Profile, User } from '../generated/prisma/client';
 import { getPrisma } from '../db/prisma';
+import { ensureD1User, findD1User } from '../db/d1';
 import { sha256Hex } from '../replay/schema';
 
 export interface AuthIdentity {
@@ -84,4 +85,20 @@ export async function findAppUser(identity: AuthIdentity): Promise<AppUser | nul
     include: { profile: true },
   });
   return user && accountCanAct(user) ? user : null;
+}
+
+export async function ensurePersistentUser(identity: AuthIdentity): Promise<{ id: string }> {
+  const prisma = getPrisma();
+  if (prisma) return ensureAppUser(identity);
+  try {
+    return await ensureD1User(identity);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ACCOUNT_RESTRICTED') throw new AccountAccessError();
+    throw error;
+  }
+}
+
+export async function findPersistentUser(identity: AuthIdentity): Promise<{ id: string } | null> {
+  const prisma = getPrisma();
+  return prisma ? findAppUser(identity) : findD1User(identity);
 }

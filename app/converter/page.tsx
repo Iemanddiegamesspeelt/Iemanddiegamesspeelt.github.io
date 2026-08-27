@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import { ConverterWorkspace } from '../../components/converter/converter-workspace';
-import { replayToolRegistry } from '../../lib/replay/registry';
+import { formatRegistry, replayToolRegistry } from '../../lib/replay/registry';
+import { getChatGPTUser } from '../chatgpt-auth';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Converter',
   description: 'Open a Geometry Dash macro and download an available replay format.',
 };
 
-export default function ConverterPage() {
+export default async function ConverterPage() {
+  const user = await getChatGPTUser();
+  const acceptedFileTypes = [...new Set(formatRegistry.flatMap((format) => format.extensions))].join(',');
   return (
     <main className="mx-auto min-h-[75vh] max-w-7xl px-5 py-12 lg:px-8">
       <header className="mb-9 max-w-3xl">
@@ -15,7 +20,11 @@ export default function ConverterPage() {
         <h1 className="mt-3 text-4xl font-semibold tracking-[-.045em] sm:text-5xl">Convert a macro</h1>
         <p className="mt-3 text-sm leading-6 text-zinc-500">Open a replay, review its details, and choose an available output.</p>
       </header>
-      <ConverterWorkspace tools={replayToolRegistry.filter((tool) => tool.id !== 'macrohub').map((tool) => ({ id: tool.id, label: tool.displayName }))} />
+      <ConverterWorkspace
+        tools={replayToolRegistry.filter((tool) => tool.id !== 'macrohub').map((tool) => ({ id: tool.id, label: tool.displayName }))}
+        signedIn={Boolean(user)}
+        acceptedFileTypes={acceptedFileTypes}
+      />
     </main>
   );
 }

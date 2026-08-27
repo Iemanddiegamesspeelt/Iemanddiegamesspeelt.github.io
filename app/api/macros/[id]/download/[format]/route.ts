@@ -1,10 +1,11 @@
 import { getChatGPTUser } from '../../../../../chatgpt-auth';
-import { findAppUser } from '../../../../../../lib/auth/app-user';
+import { findPersistentUser } from '../../../../../../lib/auth/app-user';
+import { recordD1Download } from '../../../../../../lib/db/d1';
 import { findMacroRecord } from '../../../../../../lib/data/repository';
 import { getPrisma } from '../../../../../../lib/db/prisma';
 import { convertReplay } from '../../../../../../lib/replay/conversion';
 import type { ResolvedToolCompatibility } from '../../../../../../lib/replay/conversion';
-import { getFormat } from '../../../../../../lib/replay/registry';
+import { getFormat, getReplayTool } from '../../../../../../lib/replay/registry';
 import { anonymousActorHash, userActorHash } from '../../../../../../lib/security/actor';
 import { checkRateLimit, rateLimitHeaders } from '../../../../../../lib/security/rate-limit';
 import { jsonError } from '../../../../../../lib/security/request';
@@ -16,7 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const target = getFormat(formatId);
   if (!target?.exporter || target.status !== 'implemented') return jsonError('FORMAT_UNAVAILABLE', 'This file format is not available.', 404);
   const identity = await getChatGPTUser();
-  const appUser = identity ? await findAppUser(identity) : null;
+  const appUser = identity ? await findPersistentUser(identity) : null;
   const actorHash = appUser ? await userActorHash(appUser.id) : await anonymousActorHash(request);
   const limit = await checkRateLimit(`macro-download:${actorHash}`, { limit: 60, windowMs: 60 * 60 * 1000 });
   if (!limit.allowed) return jsonError('RATE_LIMITED', 'Download limit reached. Try again later.', 429);
@@ -27,13 +28,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const toolId = (url.searchParams.get('tool') ?? '').slice(0, 64);
   const acknowledgedIssueCodes = (url.searchParams.get('ack') ?? '').split(',').filter(Boolean).slice(0, 30);
   const prisma = getPrisma();
-  if (!prisma) return jsonError('SERVICE_UNAVAILABLE', 'Downloads are temporarily unavailable.', 503);
 
   let capability;
   let selectedTool: { id: string } | null = null;
   let resolvedToolCompatibility: ResolvedToolCompatibility | undefined;
   try {
-    capability = await prisma.macroConversionCapability.findFirst({
+    if (!prisma) {
+      if (!(macro.availableFormatIds ?? []).includes(formatId)) {
+        return jsonError('FORMAT_UNAVAILABLE', 'This file format is not available for this macro.', 404);
+      }
+      capability = { format: { id: formatId } };
+      if (toolId) {
+        const tool = getReplayTool(toolId);
+        const compatibility = macro.formatCapabilities
+          ?.find((item) => item.formatId === formatId)?.tools.find((item) => item.id === toolId);
+        if (!tool || tool.status !== 'active') return jsonError('TOOL_UNAVAILABLE', 'This replay tool is not available.', 422);
+        if (!compatibility) return jsonError('TOOL_FORMAT_NOT_COMPATIBLE', 'This file format is not available for the selected replay tool.', 422);
+        selectedTool = { id: toolId };
+        resolvedToolCompatibility = {
+          replayToolId: toolId,
+          verification: compatibility.verification,
+          notes: compatibility.warning,
+        };
+      }
+    } else {
+      capability = await prisma.macroConversionCapability.findFirst({
       where: {
         macroId: id,
         quality: { not: 'BLOCKED' },
@@ -48,30 +67,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         macro: { select: { canonicalHash: true, levelId: true, uploaderId: true } },
       },
     });
-    if (!capability
-      || capability.canonicalHash !== capability.macro.canonicalHash
-      || capability.exporterVersion !== target.exporter.implementationVersion) {
-      return jsonError('FORMAT_UNAVAILABLE', 'This file format is not available for this macro.', 404);
-    }
-    if (toolId) {
-      const tool = await prisma.replayTool.findUnique({ where: { slug: toolId }, select: { id: true, status: true } });
-      if (!tool || tool.status !== 'ACTIVE') return jsonError('TOOL_UNAVAILABLE', 'This replay tool is not available.', 422);
-      const compatibility = await prisma.formatToolCompatibility.findUnique({
+      if (!capability
+        || capability.canonicalHash !== capability.macro.canonicalHash
+        || capability.exporterVersion !== target.exporter.implementationVersion) {
+        return jsonError('FORMAT_UNAVAILABLE', 'This file format is not available for this macro.', 404);
+      }
+      if (toolId) {
+        const tool = await prisma.replayTool.findUnique({ where: { slug: toolId }, select: { id: true, status: true } });
+        if (!tool || tool.status !== 'ACTIVE') return jsonError('TOOL_UNAVAILABLE', 'This replay tool is not available.', 422);
+        const compatibility = await prisma.formatToolCompatibility.findUnique({
         where: { formatId_replayToolId: { formatId: capability.format.id, replayToolId: tool.id } },
         select: { canRead: true, supportLevel: true, verification: true, warning: true },
       });
-      if (!compatibility
-        || !compatibility.canRead
-        || compatibility.supportLevel === 'UNSUPPORTED'
-        || !['verified', 'community-reported'].includes(compatibility.verification)) {
-        return jsonError('TOOL_FORMAT_NOT_COMPATIBLE', 'This file format is not available for the selected replay tool.', 422);
+        if (!compatibility
+          || !compatibility.canRead
+          || compatibility.supportLevel === 'UNSUPPORTED'
+          || !['verified', 'community-reported'].includes(compatibility.verification)) {
+          return jsonError('TOOL_FORMAT_NOT_COMPATIBLE', 'This file format is not available for the selected replay tool.', 422);
+        }
+        selectedTool = tool;
+        resolvedToolCompatibility = {
+          replayToolId: toolId,
+          verification: compatibility.verification as ResolvedToolCompatibility['verification'],
+          notes: compatibility.warning ?? undefined,
+        };
       }
-      selectedTool = tool;
-      resolvedToolCompatibility = {
-        replayToolId: toolId,
-        verification: compatibility.verification as ResolvedToolCompatibility['verification'],
-        notes: compatibility.warning ?? undefined,
-      };
     }
   } catch {
     return jsonError('SERVICE_UNAVAILABLE', 'Downloads are temporarily unavailable.', 503);
@@ -85,7 +105,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
     try {
       const windowStart = new Date(Math.floor(Date.now() / 600_000) * 600_000);
-      await prisma.$transaction(async (transaction) => {
+      if (!prisma) {
+        await recordD1Download({ macroId: id, formatId, actorHash, toolId: toolId || null });
+      } else {
+        const capabilityMacro = capability.macro;
+        if (!capabilityMacro) throw new Error('Missing macro download capability.');
+        await prisma.$transaction(async (transaction) => {
         const inserted = await transaction.download.createMany({
           data: [{
             macroId: id,
@@ -100,10 +125,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         if (!inserted.count) return;
         await Promise.all([
           transaction.macro.update({ where: { id }, data: { downloadCount: { increment: 1 } } }),
-          transaction.level.update({ where: { id: capability.macro.levelId }, data: { totalDownloads: { increment: 1 } } }),
-          transaction.profile.update({ where: { userId: capability.macro.uploaderId }, data: { totalDownloads: { increment: 1 } } }),
+          transaction.level.update({ where: { id: capabilityMacro.levelId }, data: { totalDownloads: { increment: 1 } } }),
+          transaction.profile.update({ where: { userId: capabilityMacro.uploaderId }, data: { totalDownloads: { increment: 1 } } }),
         ]);
-      });
+        });
+      }
     } catch {
       // Analytics failure must not prevent a valid file download.
     }

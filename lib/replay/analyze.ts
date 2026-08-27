@@ -9,6 +9,7 @@ export function analyzeReplay(replay: CanonicalReplayV1) {
   const rate = Number(BigInt(replay.clock.ticksPerSecond.numerator)) / Number(BigInt(replay.clock.ticksPerSecond.denominator));
   const durationTicks = replay.durationTicks ? Number(BigInt(replay.durationTicks)) : replay.events.reduce((max, event) => Math.max(max, Number(BigInt(event.tick))), 0);
   const targets = formatRegistry
+    .filter((format) => Boolean(format.exporter))
     .map((format) => {
       const assessment = assessConversion(replay, format.id);
       return {
@@ -31,8 +32,7 @@ export function analyzeReplay(replay: CanonicalReplayV1) {
             note: item.notes ?? null,
           })),
       };
-    })
-    .filter((target) => target.available);
+    });
 
   return {
     levelId: replay.level.id?.value ?? null,
