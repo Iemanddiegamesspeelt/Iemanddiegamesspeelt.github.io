@@ -49,7 +49,8 @@ export async function POST(request: Request) {
         replayToolId: typeof replayToolId === 'string' && replayToolId ? replayToolId : null,
         acknowledgedIssueCodes,
       });
-      zip.file(result.artifact.filename.replace(/[^a-z0-9._-]/gi, '-'), result.artifact.bytes);
+      const safeName = result.artifact.filename.replace(/[^a-z0-9._-]/gi, '-');
+      zip.file(`${target.format.id}-${safeName}`, result.artifact.bytes);
     }
     if (!available.length) return jsonError('NO_SAFE_EXPORTS', 'No target formats can be safely generated for this replay.', 422);
     zip.file('README.txt', `MacroHub generated ${available.length} replay format${available.length === 1 ? '' : 's'}.\nCheck that the selected format is supported by your installed replay tool version.\n`);
