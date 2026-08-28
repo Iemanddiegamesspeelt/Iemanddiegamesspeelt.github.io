@@ -1,6 +1,7 @@
-import { ArrowRight, Download, Heart, Timer, UserRound } from 'lucide-react';
+import { ArrowRight, Download, Heart, Timer } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { LevelRow, MacroRow } from '../lib/types';
+import { Avatar } from './avatar';
 
 export function LevelCard({ level }: { level: LevelRow }) {
   return <article className="card-hover rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5">
@@ -16,7 +17,7 @@ export function MacroCard({ macro, showLevel = true }: { macro: MacroRow; showLe
     <div className="flex items-center justify-between gap-3"><Status value={macro.working_status} /><span className="text-[10px] text-zinc-600">{new Date(macro.created_at).toLocaleDateString()}</span></div>
     <h3 className="mt-4 truncate text-lg font-semibold">{macro.title}</h3>
     {showLevel && <p className="mt-1 truncate text-xs text-zinc-500">{macro.level?.name ?? `Level #${macro.level_id}`}</p>}
-    <p className="mt-3 flex items-center gap-1.5 truncate text-[11px] text-zinc-600"><UserRound className="h-3 w-3" />@{macro.uploader?.username ?? 'player'}</p>
+    <p className="mt-3 flex items-center gap-2 truncate text-[11px] text-zinc-600"><Avatar profile={macro.uploader} className="h-5 w-5 rounded-md text-[8px]" />@{macro.uploader?.username ?? 'player'}</p>
     <div className="mt-5 grid grid-cols-3 gap-2 text-center"><Metric label="Inputs" value={macro.input_count.toLocaleString()} /><Metric label="Rate" value={macro.rate ? `${macro.rate} ${macro.rate_kind.toUpperCase()}` : '—'} /><Metric label="Time" value={`${macro.duration_seconds.toFixed(1)}s`} /></div>
     <div className="mt-5 flex items-center justify-between"><div className="flex gap-3 text-[11px] text-zinc-500"><span className="flex items-center gap-1"><Download className="h-3 w-3" />{macro.download_count}</span><span className="flex items-center gap-1"><Heart className="h-3 w-3" />{macro.like_count}</span></div><Link to={`/macro/${macro.id}`} className="text-xs font-semibold text-violet-300 hover:text-violet-200">View macro</Link></div>
   </article>;
