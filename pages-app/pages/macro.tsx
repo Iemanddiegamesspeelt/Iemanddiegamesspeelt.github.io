@@ -137,7 +137,11 @@ function ReportMacro({ macro }: { macro: MacroRow }) {
     if (!user) return;
     if (restricted) { setMessage('Your account is temporarily restricted.'); return; }
     setMessage('Saving…');
-    const { error } = await supabase().from('macro_reports').upsert({ macro_id: macro.id, reporter_id: user.id, status, created_at: new Date().toISOString() }, { onConflict: 'macro_id,reporter_id' });
+    let { error } = await supabase().rpc('submit_macro_review', { p_macro_id: macro.id, p_status: status });
+    if (error && (error.code === 'PGRST202' || error.message.toLowerCase().includes('submit_macro_review'))) {
+      const fallback = await supabase().from('macro_reports').upsert({ macro_id: macro.id, reporter_id: user.id, status, created_at: new Date().toISOString(), resolved_at: null, resolved_by: null }, { onConflict: 'macro_id,reporter_id' });
+      error = fallback.error;
+    }
     if (error) setMessage(error.message);
     else {
       setCounts((current) => {
