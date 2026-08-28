@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type { CollectionRow, CommentRow, LevelRow, MacroRow, ProfileRow } from './types';
 
-const macroSelect = '*, level:levels(*), uploader:profiles(*)';
+const macroSelect = '*, level:levels(*), uploader:profiles!macros_uploader_id_fkey(*)';
 
 export async function listMacros(limit = 200): Promise<MacroRow[]> {
   const { data, error } = await supabase().from('macros').select(macroSelect).neq('working_status', 'removed').order('created_at', { ascending: false }).limit(limit);
@@ -46,13 +46,13 @@ export async function listProfileMacros(userId: string): Promise<MacroRow[]> {
 }
 
 export async function listLikedMacros(userId: string): Promise<MacroRow[]> {
-  const { data, error } = await supabase().from('likes').select('macro:macros(*, level:levels(*), uploader:profiles(*))').eq('user_id', userId).order('created_at', { ascending: false });
+  const { data, error } = await supabase().from('likes').select('macro:macros(*, level:levels(*), uploader:profiles!macros_uploader_id_fkey(*))').eq('user_id', userId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).flatMap((row) => row.macro ? [row.macro] : []) as unknown as MacroRow[];
 }
 
 export async function listCollections(ownerId?: string): Promise<CollectionRow[]> {
-  let query = supabase().from('collections').select('*, owner:profiles(*), collection_macros(macro_id)').order('created_at', { ascending: false });
+  let query = supabase().from('collections').select('*, owner:profiles!collections_owner_id_fkey(*), collection_macros(macro_id)').order('created_at', { ascending: false });
   query = ownerId ? query.or(`visibility.eq.public,owner_id.eq.${ownerId}`) : query.eq('visibility', 'public');
   const { data, error } = await query.limit(100);
   if (error) throw error;
@@ -60,13 +60,13 @@ export async function listCollections(ownerId?: string): Promise<CollectionRow[]
 }
 
 export async function getCollection(id: string): Promise<CollectionRow | null> {
-  const { data, error } = await supabase().from('collections').select('*, owner:profiles(*), collection_macros(macro_id)').eq('id', id).maybeSingle();
+  const { data, error } = await supabase().from('collections').select('*, owner:profiles!collections_owner_id_fkey(*), collection_macros(macro_id)').eq('id', id).maybeSingle();
   if (error) throw error;
   return data as unknown as CollectionRow | null;
 }
 
 export async function listCollectionMacros(collectionId: string): Promise<MacroRow[]> {
-  const { data, error } = await supabase().from('collection_macros').select('macro:macros(*, level:levels(*), uploader:profiles(*))').eq('collection_id', collectionId).order('added_at', { ascending: false });
+  const { data, error } = await supabase().from('collection_macros').select('macro:macros(*, level:levels(*), uploader:profiles!macros_uploader_id_fkey(*))').eq('collection_id', collectionId).order('added_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).flatMap((row) => row.macro ? [row.macro] : []) as unknown as MacroRow[];
 }
@@ -78,7 +78,7 @@ export async function createCollection(ownerId: string, name: string, descriptio
 }
 
 export async function listComments(macroId: string): Promise<CommentRow[]> {
-  const { data, error } = await supabase().from('comments').select('*, author:profiles(*)').eq('macro_id', macroId).order('created_at');
+  const { data, error } = await supabase().from('comments').select('*, author:profiles!comments_author_id_fkey(*)').eq('macro_id', macroId).order('created_at');
   if (error) throw error;
   return (data ?? []) as unknown as CommentRow[];
 }

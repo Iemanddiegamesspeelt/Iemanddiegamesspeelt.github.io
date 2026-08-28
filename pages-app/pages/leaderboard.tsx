@@ -10,8 +10,8 @@ export function LeaderboardPage() {
     if (!isSupabaseConfigured()) return { profiles: [], macros: [], liked: [], levels: [] };
     const [profiles, macros, liked, levels] = await Promise.all([
       supabase().from('profiles').select('*').gt('macro_count', 0).order('total_downloads', { ascending: false }).limit(10),
-      supabase().from('macros').select('*, level:levels(*), uploader:profiles(*)').neq('working_status', 'removed').gt('download_count', 0).order('download_count', { ascending: false }).limit(10),
-      supabase().from('macros').select('*, level:levels(*), uploader:profiles(*)').neq('working_status', 'removed').gt('like_count', 0).order('like_count', { ascending: false }).limit(10),
+      supabase().from('macros').select('*, level:levels(*), uploader:profiles!macros_uploader_id_fkey(*)').neq('working_status', 'removed').gt('download_count', 0).order('download_count', { ascending: false }).limit(10),
+      supabase().from('macros').select('*, level:levels(*), uploader:profiles!macros_uploader_id_fkey(*)').neq('working_status', 'removed').gt('like_count', 0).order('like_count', { ascending: false }).limit(10),
       supabase().from('levels').select('*').gt('total_downloads', 0).order('total_downloads', { ascending: false }).limit(10),
     ]);
     for (const result of [profiles, macros, liked, levels]) if (result.error) throw result.error;

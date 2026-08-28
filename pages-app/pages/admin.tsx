@@ -18,7 +18,7 @@ export function AdminPage() {
     if (!allowed) return { macroReports: [], commentReports: [] };
     const [macroReports, commentReports] = await Promise.all([
       supabase().from('macro_reports').select('*, macro:macros(title), reporter:profiles!macro_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
-      supabase().from('comment_reports').select('*, comment:comments(body,macro_id,author:profiles(username)), reporter:profiles!comment_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
+      supabase().from('comment_reports').select('*, comment:comments(body,macro_id,author:profiles!comments_author_id_fkey(username)), reporter:profiles!comment_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
     ]);
     if (macroReports.error) throw macroReports.error;
     if (commentReports.error) throw commentReports.error;
