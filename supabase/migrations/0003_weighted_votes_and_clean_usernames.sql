@@ -1,5 +1,6 @@
--- Moderator votes count as ten community choices, and new usernames only receive
--- a numeric suffix when the clean username is already in use.
+-- Moderator reviews count as ten community reviews, new usernames only receive
+-- a numeric suffix when the clean username is already in use, and macro owners
+-- can delete their own uploads.
 
 create or replace function public.refresh_macro_vote_state(p_macro_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
@@ -121,3 +122,8 @@ begin
   end loop;
 end;
 $$;
+
+drop policy if exists macros_delete_mod on public.macros;
+drop policy if exists macros_delete_own_or_mod on public.macros;
+create policy macros_delete_own_or_mod on public.macros for delete to authenticated
+using (auth.uid() = uploader_id or public.is_moderator());
