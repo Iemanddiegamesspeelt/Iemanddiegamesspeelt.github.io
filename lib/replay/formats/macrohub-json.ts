@@ -2,14 +2,63 @@ import type { MacroExporter, MacroParser } from '../interfaces';
 import { ReplayValidationError, sha256Hex, stableStringify, validateCanonicalReplay } from '../schema';
 import type { CanonicalReplayV1, ConversionIssue } from '../types';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const MAX_BYTES = 10 * 1024 * 1024;
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const probeDecoder = new TextDecoder('utf-8');
 const encoder = new TextEncoder();
 
+function isGzip(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+function blobFromBytes(bytes: Uint8Array): Blob {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Blob([copy.buffer]);
+}
+
+async function gzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = blobFromBytes(bytes).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = blobFromBytes(bytes).stream().pipeThrough(new DecompressionStream('gzip'));
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BYTES) {
+        await reader.cancel();
+        throw new ReplayValidationError(['The decompressed MacroHub replay exceeds the 10 MiB limit']);
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof ReplayValidationError) throw error;
+    throw new ReplayValidationError(['The MacroHub gzip container is invalid']);
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+async function decodedPayload(bytes: Uint8Array): Promise<Uint8Array> {
+  return isGzip(bytes) ? gunzip(bytes) : bytes;
+}
+
 function safeBaseName(filename: string): string {
   return filename
+    .replace(/\.macrohub$/i, '')
     .replace(/\.macrohub\.json$/i, '')
     .replace(/[^a-z0-9_-]+/gi, '-')
     .replace(/^-+|-+$/g, '')
@@ -20,11 +69,19 @@ export const macroHubJsonParser: MacroParser = {
   implementationVersion: VERSION,
   async probe(input) {
     if (input.bytes.byteLength > MAX_BYTES) return { confidence: 'none', reason: 'File exceeds the 10 MiB limit' };
-    const prefix = probeDecoder.decode(input.bytes.slice(0, Math.min(input.bytes.length, 512)));
-    if (prefix.includes('"schema":"macrohub/replay"') || prefix.includes('"schema": "macrohub/replay"')) {
-      return { confidence: 'exact', reason: 'MacroHub schema marker found' };
+    let payload: Uint8Array;
+    try {
+      payload = await decodedPayload(input.bytes);
+    } catch {
+      return /\.macrohub$/i.test(input.filename)
+        ? { confidence: 'possible', reason: 'MacroHub extension found but the gzip container is invalid' }
+        : { confidence: 'none', reason: 'No valid MacroHub container found' };
     }
-    if (/\.macrohub\.json$/i.test(input.filename)) {
+    const prefix = probeDecoder.decode(payload.slice(0, Math.min(payload.length, 512)));
+    if (prefix.includes('"schema":"macrohub/replay"') || prefix.includes('"schema": "macrohub/replay"')) {
+      return { confidence: 'exact', reason: isGzip(input.bytes) ? 'Compressed MacroHub schema marker found' : 'MacroHub schema marker found' };
+    }
+    if (/\.macrohub(?:\.json)?$/i.test(input.filename)) {
       return { confidence: 'possible', reason: 'MacroHub extension found but schema marker was not visible' };
     }
     return { confidence: 'none', reason: 'No MacroHub schema marker' };
@@ -33,8 +90,9 @@ export const macroHubJsonParser: MacroParser = {
     if (input.bytes.byteLength > MAX_BYTES) throw new ReplayValidationError(['File exceeds the 10 MiB limit']);
     let raw: unknown;
     try {
-      raw = JSON.parse(decoder.decode(input.bytes));
-    } catch {
+      raw = JSON.parse(decoder.decode(await decodedPayload(input.bytes)));
+    } catch (error) {
+      if (error instanceof ReplayValidationError) throw error;
       throw new ReplayValidationError(['The file is not valid UTF-8 JSON']);
     }
     const replay = validateCanonicalReplay(raw);
@@ -84,12 +142,13 @@ export const macroHubJsonExporter: MacroExporter = {
   async export(replay) {
     validateCanonicalReplay(replay);
     const levelName = replay.level.name?.value ?? replay.level.id?.value ?? 'replay';
-    const filename = `${safeBaseName(levelName)}.macrohub.json`;
+    const filename = `${safeBaseName(levelName)}.macrohub`;
+    const bytes = encoder.encode(`${stableStringify(replay)}\n`);
     return {
-      bytes: encoder.encode(`${stableStringify(replay)}\n`),
+      bytes: await gzip(bytes),
       filename,
-      mediaType: 'application/vnd.macrohub.replay+json',
-      extension: '.macrohub.json',
+      mediaType: 'application/vnd.macrohub.replay+gzip',
+      extension: '.macrohub',
     };
   },
 };
@@ -97,5 +156,4 @@ export const macroHubJsonExporter: MacroExporter = {
 export function makeMacroHubReplay(input: Omit<CanonicalReplayV1, 'schema' | 'schemaVersion'>): CanonicalReplayV1 {
   return validateCanonicalReplay({ schema: 'macrohub/replay', schemaVersion: 1, ...input });
 }
-
 

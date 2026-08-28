@@ -40,15 +40,28 @@ test('round-trips the real GDR2 fixture byte for byte', async () => {
   assert.deepEqual(artifact.bytes, fixture);
 });
 
-test('converts GDR2 through the canonical representation to MacroHub JSON', async () => {
+test('converts GDR2 through the compressed MacroHub representation', async () => {
   const replay = await parsedFixture();
   const converted = await convertReplay(replay, 'macrohub-json');
   assert.equal(converted.assessment.decision, 'allowed');
-  assert.equal(converted.artifact.extension, '.macrohub.json');
+  assert.equal(converted.artifact.extension, '.macrohub');
+  assert.deepEqual([...converted.artifact.bytes.slice(0, 2)], [0x1f, 0x8b]);
+  assert.ok(converted.artifact.bytes.byteLength < new TextEncoder().encode(JSON.stringify(replay)).byteLength);
   const reparsed = await macroHubJsonParser.parse({
     bytes: converted.artifact.bytes,
     filename: converted.artifact.filename,
     mediaType: converted.artifact.mediaType,
+  });
+  assert.deepEqual(reparsed.replay, replay);
+});
+
+test('still imports legacy uncompressed MacroHub JSON files', async () => {
+  const replay = await parsedFixture();
+  const legacyBytes = new TextEncoder().encode(`${JSON.stringify(replay)}\n`);
+  const reparsed = await macroHubJsonParser.parse({
+    bytes: legacyBytes,
+    filename: 'legacy.macrohub.json',
+    mediaType: 'application/vnd.macrohub.replay+json',
   });
   assert.deepEqual(reparsed.replay, replay);
 });

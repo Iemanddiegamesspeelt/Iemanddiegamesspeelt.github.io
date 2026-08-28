@@ -33,18 +33,18 @@ type CommentReport = {
   reporter?: { username: string };
 };
 
-type LevelReport = {
+type MacroContentReport = {
   id: string;
-  level_id: string;
+  macro_id: string;
   reason: string;
   created_at: string;
-  level?: { id: string; name: string; creator: string };
+  macro?: { id: string; title: string; level_id: string };
   reporter?: { username: string };
 };
 
-function isLevelReportMigrationMissing(error: { message?: string } | null) {
+function isMacroContentReportMigrationMissing(error: { message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? '';
-  return message.includes('level_reports') || message.includes('submit_level_report');
+  return message.includes('macro_content_reports') || message.includes('submit_macro_content_report');
 }
 
 export function AdminPage() {
@@ -54,16 +54,16 @@ export function AdminPage() {
   const [busy, setBusy] = useState('');
   const [actionError, setActionError] = useState('');
   const { data, error, loading, reload } = useAsync(async () => {
-    if (!allowed) return { macroReports: [], commentReports: [], levelReports: [], users: [] };
-    const [macroReports, commentReports, levelReports, users] = await Promise.all([
+    if (!allowed) return { macroReports: [], commentReports: [], contentReports: [], users: [] };
+    const [macroReports, commentReports, contentReports, users] = await Promise.all([
       supabase().from('macro_reports').select('*, macro:macros(*), reporter:profiles!macro_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
       supabase().from('comment_reports').select('*, comment:comments(body,macro_id,author:profiles!comments_author_id_fkey(username)), reporter:profiles!comment_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
-      supabase().from('level_reports').select('*, level:levels!level_reports_level_id_fkey(id,name,creator), reporter:profiles!level_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
+      supabase().from('macro_content_reports').select('*, macro:macros!macro_content_reports_macro_id_fkey(id,title,level_id), reporter:profiles!macro_content_reports_reporter_id_fkey(username)').is('resolved_at', null).order('created_at').limit(100),
       supabase().from('profiles').select('*').order('joined_at', { ascending: false }).limit(200),
     ]);
     if (macroReports.error) throw macroReports.error;
     if (commentReports.error) throw commentReports.error;
-    if (levelReports.error && !isLevelReportMigrationMissing(levelReports.error)) throw levelReports.error;
+    if (contentReports.error && !isMacroContentReportMigrationMissing(contentReports.error)) throw contentReports.error;
     if (users.error) throw users.error;
     const reviewableMacros = ((macroReports.data ?? []) as unknown as MacroReport[])
       .filter((report) => report.status !== 'working' && Boolean(report.macro?.community_flagged_at));
@@ -73,7 +73,7 @@ export function AdminPage() {
     return {
       macroReports: reviewableMacros,
       commentReports: (commentReports.data ?? []) as unknown as CommentReport[],
-      levelReports: (levelReports.data ?? []) as unknown as LevelReport[],
+      contentReports: (contentReports.data ?? []) as unknown as MacroContentReport[],
       users: restrictedUsers,
     };
   }, [allowed]);
@@ -116,26 +116,32 @@ export function AdminPage() {
     }
   }
 
-  async function levelAction(report: LevelReport) {
+  async function contentReportAction(report: MacroContentReport, remove: boolean) {
     setBusy(report.id);
     setActionError('');
     try {
-      const { error: resolved } = await supabase().from('level_reports').update({
+      if (remove) {
+        const { error: action } = await supabase().rpc('moderate_macro_status', { p_macro_id: report.macro_id, p_status: 'removed', p_reason: report.reason });
+        if (action) throw action;
+      }
+      const { error: resolved } = await supabase().from('macro_content_reports').update({
         resolved_at: new Date().toISOString(),
         resolved_by: profile!.id,
       }).eq('id', report.id);
       if (resolved) throw resolved;
-      const { error: audit } = await supabase().from('moderation_actions').insert({
-        moderator_id: profile!.id,
-        target_type: 'report',
-        target_id: report.id,
-        action: 'dismiss_level_report',
-        reason: report.reason,
-      });
-      if (audit) throw audit;
+      if (!remove) {
+        const { error: audit } = await supabase().from('moderation_actions').insert({
+          moderator_id: profile!.id,
+          target_type: 'report',
+          target_id: report.id,
+          action: 'dismiss_macro_report',
+          reason: report.reason,
+        });
+        if (audit) throw audit;
+      }
       await reload();
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Level report could not be resolved.');
+      setActionError(caught instanceof Error ? caught.message : 'Macro report could not be resolved.');
     } finally {
       setBusy('');
     }
@@ -173,7 +179,7 @@ export function AdminPage() {
     {error && <div className="mt-6"><ErrorBox message={error} /></div>}
     {actionError && <div className="mt-6"><ErrorBox message={actionError} /></div>}
     {loading ? <div className="mt-8"><Loading /></div> : data && <div className="mt-8 grid gap-5 lg:grid-cols-2">
-      <Board title="Macro reports" count={data.macroReports.length}>
+      <Board title="Macro reviews" count={data.macroReports.length}>
         {data.macroReports.map((report) => <article key={report.id} className="rounded-2xl border border-white/[.055] bg-white/[.018] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -207,13 +213,14 @@ export function AdminPage() {
         </article>)}
       </Board>
 
-      <Board title="Level reports" count={data.levelReports.length}>
-        {data.levelReports.map((report) => <article key={report.id} className="rounded-2xl border border-white/[.055] bg-white/[.018] p-4">
-          <Link to={`/level/${report.level_id}`} className="text-sm font-semibold hover:text-violet-200">{report.level?.name ?? `Level #${report.level_id}`}</Link>
-          <p className="mt-1 text-[10px] text-zinc-700">by {report.level?.creator ?? 'Unknown'} · reported by @{report.reporter?.username ?? 'player'} · {new Date(report.created_at).toLocaleString()}</p>
+      <Board title="Reported macros" count={data.contentReports.length}>
+        {data.contentReports.map((report) => <article key={report.id} className="rounded-2xl border border-white/[.055] bg-white/[.018] p-4">
+          <Link to={`/macro/${report.macro_id}`} className="text-sm font-semibold hover:text-violet-200">{report.macro?.title ?? 'Reported macro'}</Link>
+          <p className="mt-1 text-[10px] text-zinc-700">reported by @{report.reporter?.username ?? 'player'} · {new Date(report.created_at).toLocaleString()}</p>
           <p className="mt-3 rounded-xl bg-amber-400/[.045] p-3 text-xs leading-5 text-amber-100">{report.reason}</p>
-          <div className="mt-4 flex gap-2">
-            <Action disabled={Boolean(busy)} onClick={() => void levelAction(report)} label="Dismiss report" />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Action disabled={Boolean(busy)} onClick={() => void contentReportAction(report, false)} label="Dismiss report" />
+            <Action danger disabled={Boolean(busy)} onClick={() => void contentReportAction(report, true)} label="Remove macro" />
             {busy === report.id && <LoaderCircle className="h-4 w-4 animate-spin text-violet-300" />}
           </div>
         </article>)}

@@ -54,12 +54,12 @@ import {
 export const formatRegistry: readonly MacroFormatDefinition[] = [
   {
     id: 'macrohub-json',
-    displayName: 'MacroHub Canonical JSON v1',
-    shortName: 'MH JSON',
-    extensions: ['.macrohub.json'],
-    mediaTypes: ['application/vnd.macrohub.replay+json', 'application/json'],
+    displayName: 'MacroHub Replay v1',
+    shortName: 'MacroHub',
+    extensions: ['.macrohub', '.macrohub.json'],
+    mediaTypes: ['application/vnd.macrohub.replay+gzip', 'application/vnd.macrohub.replay+json', 'application/json'],
     status: 'implemented',
-    summary: 'Versioned, lossless canonical exchange format with strict validation.',
+    summary: 'Gzip-compressed, versioned, lossless canonical replay with strict validation.',
     parser: macroHubJsonParser,
     exporter: macroHubJsonExporter,
   },

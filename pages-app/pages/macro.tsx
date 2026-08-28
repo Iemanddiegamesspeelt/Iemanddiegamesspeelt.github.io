@@ -91,7 +91,7 @@ export function MacroPage() {
         <Timeline replay={data.replay} />
         <section className="rounded-[28px] border border-white/[.075] bg-[#0e1118] p-6 sm:p-8"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-violet-300">Downloads</p><h2 className="mt-2 text-2xl font-semibold">Download in any format</h2><p className="mt-2 text-xs text-zinc-600">Choose any implemented output format below.</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{formats.map(({ format, assessment }) => { const allowed = assessment.decision === 'allowed'; return <article key={format.id} className={`rounded-[20px] border p-4 ${allowed ? 'border-white/[.07] bg-white/[.018]' : 'border-white/[.045] bg-white/[.01] opacity-60'}`}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{format.displayName}</h3><p className="mt-1 text-xs text-zinc-600">{format.extensions.join(', ')}</p></div>{allowed ? <CheckCircle2 aria-label="Download available" className="h-4 w-4 text-emerald-300" /> : <AlertTriangle aria-label="Download unavailable" className="h-4 w-4 text-amber-300" />}</div><button disabled={!allowed || Boolean(busy)} onClick={() => void download(format.id)} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 text-xs font-semibold hover:bg-violet-400 disabled:opacity-35">{busy === format.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}{allowed ? 'Download' : 'Unavailable'}</button></article>; })}</div></section>
         <Comments macroId={id} comments={data.comments} onChanged={reload} />
-      </div><aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><div className="grid grid-cols-2 gap-3"><Metric label="Downloads" value={macro.download_count.toLocaleString()} /><Metric label="Likes" value={macro.like_count.toLocaleString()} /></div>{user ? <button type="button" disabled={Boolean(busy)} onClick={() => void like()} className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold ${liked ? 'border-rose-400/20 bg-rose-400/[.09] text-rose-200' : 'border-white/[.08] bg-white/[.04] text-zinc-300'}`}><Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />{liked ? 'Liked' : 'Like macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${id}`)}`} className="mt-4 flex h-11 items-center justify-center rounded-xl bg-white/[.05] text-xs font-semibold">Sign in to like</Link>}{user?.id === macro.uploader_id && <button type="button" disabled={Boolean(busy)} onClick={() => void removeMacro()} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/15 text-xs font-semibold text-rose-200 hover:bg-rose-400/[.06] disabled:opacity-40">{busy === 'delete' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Delete macro</button>}</section><ReportMacro macro={macro} /></aside></div>
+      </div><aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><div className="grid grid-cols-2 gap-3"><Metric label="Downloads" value={macro.download_count.toLocaleString()} /><Metric label="Likes" value={macro.like_count.toLocaleString()} /></div>{user ? <button type="button" disabled={Boolean(busy)} onClick={() => void like()} className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold ${liked ? 'border-rose-400/20 bg-rose-400/[.09] text-rose-200' : 'border-white/[.08] bg-white/[.04] text-zinc-300'}`}><Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />{liked ? 'Liked' : 'Like macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${id}`)}`} className="mt-4 flex h-11 items-center justify-center rounded-xl bg-white/[.05] text-xs font-semibold">Sign in to like</Link>}{user?.id === macro.uploader_id && <button type="button" disabled={Boolean(busy)} onClick={() => void removeMacro()} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/15 text-xs font-semibold text-rose-200 hover:bg-rose-400/[.06] disabled:opacity-40">{busy === 'delete' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Delete macro</button>}</section><ReportMacro macro={macro} /><MacroModerationReport macro={macro} /></aside></div>
     {actionError && <div role="alert" className="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100%-2rem)] -translate-x-1/2 gap-2 rounded-xl border border-rose-400/20 bg-[#171019] px-4 py-3 text-xs text-rose-200 shadow-2xl"><AlertTriangle className="h-4 w-4 shrink-0" />{actionError}</div>}
   </main>;
 }
@@ -155,6 +155,61 @@ function ReportMacro({ macro }: { macro: MacroRow }) {
     }
   }
   return <section className={`rounded-[24px] border p-5 ${communityWarning ? 'border-amber-400/20 bg-amber-400/[.055]' : 'border-white/[.075] bg-[#0e1118]'}`}><h2 className="text-sm font-semibold">Does this macro work?</h2>{communityWarning && <p role="alert" className="mt-3 text-xs leading-5 text-amber-100">Community warning: broken and outdated reviews outnumber working reviews.</p>}<div className="mt-4 grid grid-cols-3 gap-2">{([['working', working], ['broken', broken], ['outdated', outdated]] as const).map(([status, count]) => user ? <button key={status} type="button" disabled={restricted} onClick={() => void report(status)} className={`rounded-lg border px-2 py-2 text-[9px] capitalize transition disabled:cursor-not-allowed disabled:opacity-40 ${review === status ? 'border-violet-400/35 bg-violet-400/15 text-violet-100' : 'border-white/[.07] bg-white/[.025] text-zinc-400 hover:text-white'}`}>{status}<span className="ml-1 text-zinc-600">{count}</span></button> : <span key={status} className="rounded-lg border border-white/[.06] bg-white/[.02] px-2 py-2 text-center text-[9px] capitalize text-zinc-500">{status}<span className="ml-1 text-zinc-700">{count}</span></span>)}</div>{!user && <Link to={`/login?return_to=${encodeURIComponent(`/macro/${macro.id}`)}`} className="mt-4 inline-flex text-xs font-semibold text-violet-300">Sign in to review</Link>}{restricted && <p className="mt-3 text-[10px] leading-4 text-amber-200">Reviews are unavailable while your account is restricted.</p>}{voteWeight === 10 && <p className="mt-3 text-[10px] leading-4 text-violet-300">Your moderator review counts as 10.</p>}{message && <p className="mt-3 text-[10px] leading-4 text-zinc-600">{message}</p>}<p className="mt-3 text-[9px] leading-4 text-zinc-700">A community warning needs at least 10 reviews.</p></section>;
+}
+
+function MacroModerationReport({ macro }: { macro: MacroRow }) {
+  const { user, profile } = useAuth();
+  const [reportedMacroId, setReportedMacroId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const reported = Boolean(user && reportedMacroId === macro.id);
+  const restricted = Boolean(profile?.banned_at || profile?.restricted_until);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void supabase().from('macro_content_reports').select('id').eq('macro_id', macro.id).eq('reporter_id', user.id).maybeSingle().then(({ data }) => {
+      if (active) setReportedMacroId(data ? macro.id : '');
+    });
+    return () => { active = false; };
+  }, [macro.id, user]);
+
+  async function report() {
+    if (!user || reported || busy) return;
+    if (restricted) {
+      setNotice('Reporting is unavailable while your account is restricted.');
+      return;
+    }
+    const reason = window.prompt('What is wrong with this macro?')?.trim();
+    if (!reason) return;
+    setBusy(true);
+    setNotice('');
+    try {
+      const { error } = await supabase().rpc('submit_macro_content_report', { p_macro_id: macro.id, p_reason: reason.slice(0, 1000) });
+      if (error) throw error;
+      setReportedMacroId(macro.id);
+      setNotice('Macro reported. A moderator can now review it.');
+    } catch (caught) {
+      const message = caught && typeof caught === 'object' && 'message' in caught ? String(caught.message) : '';
+      if (message.toLowerCase().includes('already reported')) {
+        setReportedMacroId(macro.id);
+        setNotice('You already reported this macro.');
+      } else if (message.toLowerCase().includes('function') || message.toLowerCase().includes('macro_content_reports')) {
+        setNotice('Macro reporting needs the latest database update before it can be used.');
+      } else {
+        setNotice(message || 'The macro could not be reported. Please try again.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5">
+    <h2 className="text-sm font-semibold">Report this macro</h2>
+    <p className="mt-2 text-[10px] leading-4 text-zinc-600">Send problems such as misleading information or unsafe content to the moderators.</p>
+    {user ? <button type="button" disabled={reported || busy} onClick={() => void report()} className={`mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition disabled:cursor-default ${reported ? 'border-amber-400/15 bg-amber-400/[.06] text-amber-200' : 'border-white/[.08] bg-white/[.035] text-zinc-400 hover:border-amber-400/20 hover:text-amber-200'}`}>{busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Flag className="h-3.5 w-3.5" />}{reported ? 'Already reported' : 'Report macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${macro.id}`)}`} className="mt-4 flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[.08] bg-white/[.035] text-xs font-semibold text-zinc-400 hover:text-amber-200"><Flag className="h-3.5 w-3.5" />Sign in to report</Link>}
+    {notice && <p role="status" className="mt-3 text-[10px] leading-4 text-amber-200">{notice}</p>}
+  </section>;
 }
 
 function Comments({ macroId, comments, onChanged }: { macroId: string; comments: CommentRow[]; onChanged: () => Promise<void> }) {
