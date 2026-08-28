@@ -17,22 +17,22 @@ GitHub Pages (React + TypeScript + Tailwind)
 All replay conversions run locally in the browser:
 
 ```text
-source file → detected parser → canonical replay → capability check → exporter → verified download
+source file → detected parser → canonical replay → exporter → verified download
 ```
 
-There is no source-to-target converter matrix. A target is offered only when its real exporter can preserve required gameplay and timing data. Generated files are parsed again for semantic round-trip verification. Optional metadata loss is disclosed; required data loss blocks the conversion.
+There is no source-to-target converter matrix. Every implemented exporter is available from the converter and macro download page. Optional metadata differences are handled automatically, while generated files are still parsed again for semantic round-trip verification so invalid output is never silently downloaded.
 
 ## One-time Supabase setup
 
 1. Create a Supabase project.
-2. Open **SQL Editor**, paste [`supabase/migrations/0001_macrohub.sql`](supabase/migrations/0001_macrohub.sql), and run it once.
+2. Open **SQL Editor**, paste [`supabase/migrations/0001_macrohub.sql`](supabase/migrations/0001_macrohub.sql), and run it once. Then paste and run [`supabase/migrations/0002_community_moderation.sql`](supabase/migrations/0002_community_moderation.sql).
 3. In **Authentication → Providers**, enable Email. Enable Google after completing the Google setup below.
 4. In **Authentication → URL Configuration**, set the Site URL to the final GitHub Pages address and add its callback URL:
    - project site: `https://YOUR-NAME.github.io/REPOSITORY/auth/callback`
    - account site: `https://YOUR-NAME.github.io/auth/callback`
 5. Copy the project URL and publishable key from **Project Settings → API**. Never put the service-role key in GitHub Pages.
 
-The SQL migration creates all tables, constraints, indexes, activity counters, download de-duplication, RLS policies, and the public `macrohub-files` bucket. Upload/update/delete access remains restricted to each signed-in user's own storage folder.
+The migrations create all tables, constraints, indexes, activity counters, vote aggregation, temporary account restrictions, download de-duplication, RLS policies, and the public `macrohub-files` bucket. Upload/update/delete access remains restricted to each signed-in user's own storage folder.
 
 After your first sign-in, promote your own account in the Supabase SQL Editor if you need the moderation screen:
 

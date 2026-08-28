@@ -1,6 +1,7 @@
 import { assessConversion } from './conversion';
 import { formatCompatibilityRegistry, formatRegistry } from './registry';
 import type { CanonicalReplayV1 } from './types';
+import { formatGeometryDashVersion } from '../utils';
 
 export function analyzeReplay(replay: CanonicalReplayV1) {
   const inputEvents = replay.events.filter((event) => event.kind === 'input');
@@ -37,7 +38,9 @@ export function analyzeReplay(replay: CanonicalReplayV1) {
   return {
     levelId: replay.level.id?.value ?? null,
     levelName: replay.level.name?.value ?? null,
-    geometryDashVersion: replay.recording.geometryDashVersion?.value ?? null,
+    geometryDashVersion: replay.recording.geometryDashVersion?.value
+      ? formatGeometryDashVersion(replay.recording.geometryDashVersion.value)
+      : null,
     completionPercent: replay.recording.completionPercent?.value ?? null,
     rate: Number.isFinite(rate) ? rate : null,
     rateKind: replay.recording.declaredRate?.value.kind ?? 'tps',

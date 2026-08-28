@@ -6,6 +6,9 @@ export type ProfileRow = {
   avatar_url: string | null;
   role: 'user' | 'moderator' | 'admin';
   banned_at?: string | null;
+  restricted_until?: string | null;
+  restriction_strikes?: number;
+  last_restricted_at?: string | null;
   joined_at: string;
   macro_count: number;
   total_downloads: number;
@@ -48,6 +51,11 @@ export type MacroRow = {
   download_count: number;
   like_count: number;
   comment_count: number;
+  working_votes?: number;
+  broken_votes?: number;
+  outdated_votes?: number;
+  community_flagged_at?: string | null;
+  community_restriction_applied_at?: string | null;
   created_at: string;
   level?: LevelRow;
   uploader?: ProfileRow;

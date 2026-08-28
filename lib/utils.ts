@@ -38,3 +38,14 @@ export function formatRate(tps?: number, fps?: number): string {
   return 'Rate unknown';
 }
 
+export function formatGeometryDashVersion(value?: string | null): string {
+  const raw = value?.trim();
+  if (!raw || raw.toLowerCase() === 'unknown') return 'Unknown';
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) return raw;
+  if (Number.isInteger(numeric) && numeric >= 100) {
+    const digits = String(numeric);
+    return `${digits[0]}.${digits.slice(1)}`;
+  }
+  return numeric.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+}

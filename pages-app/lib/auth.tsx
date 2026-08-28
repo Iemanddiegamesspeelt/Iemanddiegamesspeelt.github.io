@@ -25,7 +25,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { data } = await supabase().from('profiles').select('*').eq('id', userId).maybeSingle();
-    setProfile((data as ProfileRow | null) ?? null);
+    const nextProfile = (data as ProfileRow | null) ?? null;
+    if (nextProfile?.restricted_until && Date.parse(nextProfile.restricted_until) <= Date.now()) {
+      setProfile({ ...nextProfile, restricted_until: null });
+    } else {
+      setProfile(nextProfile);
+    }
   }
 
   useEffect(() => {
@@ -43,6 +48,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!profile?.restricted_until) return;
+    let timer = 0;
+    const expiresAt = Date.parse(profile.restricted_until);
+    const check = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        setProfile((current) => current ? { ...current, restricted_until: null } : null);
+        return;
+      }
+      timer = window.setTimeout(check, Math.min(remaining, 2_147_000_000));
+    };
+    check();
+    return () => window.clearTimeout(timer);
+  }, [profile?.restricted_until]);
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
