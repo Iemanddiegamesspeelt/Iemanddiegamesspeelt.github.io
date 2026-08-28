@@ -17,20 +17,40 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.configuration.outputs.configured }}
     steps:
+      - name: Check Supabase configuration
+        id: configuration
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Supabase Actions secrets are not configured; deployment is safely skipped."
+          fi
+
       - name: Check out repository
+        if: steps.configuration.outputs.configured == 'true'
         uses: actions/checkout@v6
 
       - name: Set up Node.js
+        if: steps.configuration.outputs.configured == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
+        if: steps.configuration.outputs.configured == 'true'
         run: npm ci
 
       - name: Choose GitHub Pages base path
+        if: steps.configuration.outputs.configured == 'true'
         shell: bash
         run: |
           if [ -n "${{ vars.PAGES_BASE_PATH }}" ]; then
@@ -42,16 +62,16 @@ jobs:
           fi
 
       - name: Build static website
+        if: steps.configuration.outputs.configured == 'true'
         shell: bash
         run: |
-          test -n "$VITE_SUPABASE_URL"
-          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY"
           npm run build:pages
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Add deep-link fallback
+        if: steps.configuration.outputs.configured == 'true'
         shell: bash
         run: |
           test -f out-pages/index.html
@@ -59,14 +79,17 @@ jobs:
           touch out-pages/.nojekyll
 
       - name: Configure GitHub Pages
+        if: steps.configuration.outputs.configured == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload static artifact
+        if: steps.configuration.outputs.configured == 'true'
         uses: actions/upload-pages-artifact@v4
         with:
           path: out-pages
 
   deploy:
+    if: needs.build.outputs.configured == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
