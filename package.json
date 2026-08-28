@@ -7,10 +7,13 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "dev:pages": "vite --config vite.pages.config.ts",
     "build": "vinext build",
+    "build:pages": "vite build --config vite.pages.config.ts",
+    "preview:pages": "vite preview --config vite.pages.config.ts",
     "start": "vinext start",
     "postinstall": "prisma generate",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern node_modules",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern out-pages --ignore-pattern .next --ignore-pattern node_modules",
     "typecheck": "tsc --noEmit --incremental false",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
@@ -22,11 +25,13 @@
     "@neondatabase/serverless": "1.1.0",
     "@prisma/adapter-neon": "6.19.0",
     "@prisma/client": "6.19.0",
+    "@supabase/supabase-js": "^2.112.4",
     "jszip": "3.10.1",
     "lucide-react": "0.468.0",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "react-router-dom": "^7.18.2",
     "zod": "4.4.3"
   },
   "devDependencies": {

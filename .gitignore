@@ -15,6 +15,7 @@
 /.next/
 /.vinext/
 /out/
+/out-pages/
 
 # misc
 .DS_Store
@@ -30,6 +31,7 @@ yarn-error.log*
 # local environment
 .env*
 !.env.example
+!.env.pages.example
 
 # deployment and generated files
 .vercel

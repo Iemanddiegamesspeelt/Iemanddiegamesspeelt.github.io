@@ -5,7 +5,11 @@ import nextTs from 'eslint-config-next/typescript';
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores(['.next/**', 'out/**', 'build/**', 'next-env.d.ts']),
+  {
+    files: ['pages-app/**/*.{ts,tsx}'],
+    rules: { '@next/next/no-img-element': 'off' },
+  },
+  globalIgnores(['.next/**', 'out/**', 'out-pages/**', 'build/**', 'next-env.d.ts']),
 ]);
 
 export default eslintConfig;

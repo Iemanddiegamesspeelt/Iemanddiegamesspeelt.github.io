@@ -1,132 +1,114 @@
 # MacroHub
 
-MacroHub is a dark, responsive Geometry Dash macro platform for browsing levels, publishing replay files, filtering downloads by replay tool, converting local files, collecting macros, commenting, and moderation.
+MacroHub is a dark, responsive Geometry Dash macro platform for finding, publishing, converting, collecting, and downloading replay files. The GitHub Pages build is a static React app; Supabase provides Google and email/password authentication, PostgreSQL, Row Level Security, and object storage.
 
-The public catalog starts empty. The seed command creates only the format, replay-tool, and compatibility registries, so download counts, likes, level totals, and uploader metrics come from actual activity.
+The catalog starts empty. The database migration adds only real format/tool definitions—no demo levels, macros, likes, downloads, or invented totals.
 
-## Stack
+## Architecture
 
-- Next.js-compatible App Router UI through Vinext, React, TypeScript, and Tailwind CSS
-- PostgreSQL/Neon with Prisma ORM, plus a Cloudflare D1 catalog path for Sites hosting
-- ChatGPT Sites identity headers with an explicit MacroHub session cookie, so first visits remain signed out
-- Cloudflare R2 through the `FILES` binding
-- Zod validation and strict TypeScript
+```text
+GitHub Pages (React + TypeScript + Tailwind)
+  ├─ browser-side replay parsing and conversion
+  ├─ Supabase Auth (Google + email/password)
+  ├─ Supabase Postgres (catalog, likes, comments, collections, reports)
+  └─ Supabase Storage (original + canonical replay files and avatars)
+```
 
-## Local setup
+All replay conversions run locally in the browser:
 
-Requirements: Node.js 22.13 or newer, PostgreSQL 15 or newer, and an R2-compatible local binding supplied by the Sites/Vite setup.
+```text
+source file → detected parser → canonical replay → capability check → exporter → verified download
+```
+
+There is no source-to-target converter matrix. A target is offered only when its real exporter can preserve required gameplay and timing data. Generated files are parsed again for semantic round-trip verification. Optional metadata loss is disclosed; required data loss blocks the conversion.
+
+## One-time Supabase setup
+
+1. Create a Supabase project.
+2. Open **SQL Editor**, paste [`supabase/migrations/0001_macrohub.sql`](supabase/migrations/0001_macrohub.sql), and run it once.
+3. In **Authentication → Providers**, enable Email. Enable Google after completing the Google setup below.
+4. In **Authentication → URL Configuration**, set the Site URL to the final GitHub Pages address and add its callback URL:
+   - project site: `https://YOUR-NAME.github.io/REPOSITORY/auth/callback`
+   - account site: `https://YOUR-NAME.github.io/auth/callback`
+5. Copy the project URL and publishable key from **Project Settings → API**. Never put the service-role key in GitHub Pages.
+
+The SQL migration creates all tables, constraints, indexes, activity counters, download de-duplication, RLS policies, and the public `macrohub-files` bucket. Upload/update/delete access remains restricted to each signed-in user's own storage folder.
+
+After your first sign-in, promote your own account in the Supabase SQL Editor if you need the moderation screen:
+
+```sql
+update public.profiles set role = 'admin' where username = 'your_username';
+```
+
+## Google login setup
+
+1. In Google Cloud Console, create an OAuth 2.0 Web application.
+2. Add Supabase's callback URL as an authorized redirect URI. Supabase shows the exact URL in the Google provider settings; it normally looks like `https://PROJECT-REF.supabase.co/auth/v1/callback`.
+3. Paste the Google Client ID and Client Secret into **Supabase → Authentication → Providers → Google** and enable it.
+4. Keep the GitHub Pages `/auth/callback` URL in Supabase's redirect allow list as described above.
+
+## GitHub Pages deployment
+
+1. Create a GitHub repository and push this project to its `main` branch.
+2. In **Settings → Secrets and variables → Actions → Secrets**, add:
+   - `SUPABASE_URL`
+   - `SUPABASE_PUBLISHABLE_KEY`
+3. In **Settings → Pages**, choose **GitHub Actions** as the source.
+4. For a normal project repository, no base-path variable is needed; the workflow uses `/REPOSITORY/` automatically.
+5. For a custom domain or `YOUR-NAME.github.io` repository, add an Actions variable named `PAGES_BASE_PATH` with the value `/`.
+6. Push to `main`, or open **Actions → Deploy MacroHub to GitHub Pages → Run workflow**.
+
+The workflow in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds the static app, adds GitHub Pages deep-link fallback, and deploys the artifact.
+
+This repository includes the existing `macrohub.me` CNAME in the static artifact. For this deployment, use `https://macrohub.me` as the Supabase Site URL and `https://macrohub.me/auth/callback` as an allowed redirect URL.
+
+## Local development
+
+Requirements: Node.js 22.13 or newer.
 
 ```bash
 npm install
-cp .env.example .env.local
-npm run db:migrate
-npm run db:seed
-npm run dev
+copy .env.pages.example .env.local
+npm run dev:pages
 ```
 
-For migrations, use a direct PostgreSQL/Neon connection URL rather than a transaction-pooled runtime URL. The initial migration enables `pg_trgm`; enable that extension in the database console first if the migration role cannot create extensions.
+Edit `.env.local` with the Supabase project URL and publishable key. The converter works without Supabase; browsing, accounts, uploads, likes, comments, and collections require it.
 
-The converter remains usable without a database. On Sites, the `DB` D1 binding and packaged `drizzle/` migration provide durable accounts, published macros, levels, profiles, and download totals even when `DATABASE_URL` is not set. A configured PostgreSQL database remains the full social and moderation backend.
-
-## Cloudflare/Sites bindings
-
-The repository contains `.openai/hosting.json` with the D1 binding name `DB` and R2 binding name `FILES`. A PostgreSQL deployment also needs these secrets/environment values:
-
-- optional `DATABASE_URL` to use the full Prisma backend instead of the Sites D1 catalog
-- `RATE_LIMIT_SECRET` with at least 32 random bytes
-- `NEXT_PUBLIC_SITE_URL`
-- optional `GD_LEVEL_PROVIDER_URL`
-
-Sites supplies the authenticated user headers consumed by `app/chatgpt-auth.ts`. Local anonymous browsing and conversion do not need an auth provider emulator.
-
-Configure R2 lifecycle rules to delete `quarantine/` objects after 24 hours and generated `cache/` objects after the chosen cache retention window. Quarantine manifests also contain a one-hour application expiry. Preserve and reconcile ready objects when a database commit outcome is ambiguous; never delete them speculatively.
-
-## Database
-
-The Prisma schema separates macros, formats, tools, and compatibility:
-
-- `Macro` owns one canonical replay and one ready original file.
-- `MacroFormat` and `ReplayTool` are independent registries.
-- `FormatToolCompatibility` is the many-to-many read/write relationship.
-- `MacroConversionCapability` records a macro-specific assessment, canonical hash, and exporter version.
-- Direct downloads re-check enabled state, capability freshness, tool status, compatibility, and exporter assessment before generating bytes.
-- Likes, collection membership, reports, and deduplicated download windows use database uniqueness constraints.
-- `RateLimitBucket` provides shared limits across Worker isolates when PostgreSQL is available, with a bounded local fallback for converter-only development.
-
-Run:
+Build and preview the exact static artifact:
 
 ```bash
-npm run db:generate
-npm run db:migrate
-npm run db:seed
+npm run build:pages
+npm run preview:pages
 ```
 
-Promote an account to moderator/admin directly in PostgreSQL after its first sign-in:
+## Replay formats and tools
 
-```sql
-UPDATE "User" SET "role" = 'ADMIN' WHERE "emailNormalized" = 'you@example.com';
-```
+The format registry currently has verified parsers and version-pinned exporters for 23 format families, including GDR2, GDR, GDR JSON, MHR, MHR JSON, CML, SLC, XBOT, XD, Echo, ReplayBot, yBot, OmegaBot, TASBot JSON, Rush, KD-Bot, zBot, Fembot, TCM, Amethyst, GDMO, ReplayEngine 3, and MacroHub Canonical JSON.
 
-## Replay conversion
+Formats and replay tools are separate registries. Compatibility is an explicit many-to-many relationship, so a format is never presented as belonging exclusively to one replay tool. Eclipse, Mega Hack, xdBot, Echo, ReplayBot, and other tools can each expose multiple compatible formats when supported.
 
-Conversion always follows one path:
+## Security
 
-```text
-source bytes -> format detector -> parser -> MacroHub canonical replay -> capability assessment -> exporter -> target bytes
-```
+- Supabase PKCE authentication with Google or email/password
+- RLS enabled on every public application table
+- storage ownership policies based on the authenticated user's folder
+- 10 MiB replay limit and 2 MiB avatar limit
+- file extension, signature, executable, script, HTML, and SVG rejection
+- strict canonical replay validation with a 250,000-event limit
+- unique likes and collection membership
+- 10-minute rapid duplicate download suppression
+- ownership checks for profile, macro, comment, and collection writes
+- moderator/admin roles and immutable moderation audit records
 
-There is no source-to-target converter matrix. A format is downloadable only when it has a real exporter and the generated file passes semantic round-trip verification when a parser is available.
-
-Implemented codecs:
-
-- `.gdr2` version 2 import/export, verified against CC0 Eclipse replay fixtures
-- `.macrohub.json` canonical version 1 import/export
-- strict importers for `.gdr`, `.gdr.json`, `.mhr`, `.mhr.json`, `.cml`, SLC v1-v3, `.xbot`, `.xd`, Echo binary/JSON, ReplayBot v2, OmegaBot v2, `.ybot`, TASBot JSON, `.rsh`, `.kd`, `.zbf`, `.freplay`, TCM v1/v2, `.thyst`, modern/GDMO 2.2 `.macro`, and `.re3`
-
-Import support and export support remain separate capabilities. Every currently catalogued replay family now has a version-pinned exporter, but each replay is assessed before conversion. A target is blocked when its wire format cannot preserve required inputs, timing, player state, or critical extensions; optional metadata loss is shown as a warning. MacroHub never emits placeholder or invented replay files.
-
-The canonical format is documented by `schemas/macrohub-replay-v1.schema.json`. New codecs implement `MacroParser`, `MacroExporter`, and `MacroFormatDefinition`, then add explicit tool compatibility records separately.
-
-## Geometry Dash metadata provider
-
-`GeometryDashLevelProvider` keeps catalog logic independent of an external level service. When `GD_LEVEL_PROVIDER_URL` is set, the provider may be replaced with an HTTP adapter that returns:
-
-```json
-{
-  "id": "123",
-  "name": "Level name",
-  "creator": "Creator",
-  "difficulty": "Demon",
-  "demonDifficulty": "Extreme",
-  "stars": 10,
-  "length": "XL",
-  "geometryDashVersion": "2.2",
-  "fetchedAt": "2026-08-24T12:00:00.000Z",
-  "source": "provider-name"
-}
-```
-
-If no trusted provider is configured and the replay does not contain a level name, the uploader must supply the missing display fields. A level ID embedded in the replay must match the submitted ID.
-
-## Security and operations
-
-- 10 MiB file limit, allowlisted extensions, detected content, MIME normalization, filename sanitization, and executable/active-content signature rejection
-- same-origin checks on state-changing routes and bounded JSON bodies
-- authenticated ownership checks, account-state enforcement, role-gated moderation, atomic audit records, and database constraints/triggers
-- idempotent publishing via `sourceUploadId`
-- R2 quarantine and copy-before-commit storage flow with rollback/reconciliation safeguards
-- HMAC actor identifiers and rapid-download deduplication
-- database-backed browse filters, bounded autocomplete, pagination, and indexed search fields
-
-For a high-volume deployment, monitor rate-limit table growth, schedule expired-bucket cleanup, apply the R2 lifecycle rules above, and run a periodic storage reconciliation against `MacroCanonicalReplay` and `MacroFile` keys.
+The publishable Supabase key is intentionally public. Security comes from RLS and database/storage policies. Never expose a service-role key in this app or in a GitHub Actions build variable beginning with `VITE_`.
 
 ## Verification
 
 ```bash
+npm run build:pages
 npm run typecheck
 npm run lint
 npm test
-npm run build
 ```
 
-The conversion suite includes a real Eclipse `.gdr2` fixture, byte-identical round trips, canonical JSON conversion, loss warnings, hard conversion blocks, tool-policy resolution, strict fixtures for every registered source family, malformed-input rejection, and sign-in return-path regression coverage.
+The older Next/Vinext application remains in the repository for the existing Sites deployment. The GitHub Pages entry point is isolated in `pages-app/` and does not require a Next.js server.
