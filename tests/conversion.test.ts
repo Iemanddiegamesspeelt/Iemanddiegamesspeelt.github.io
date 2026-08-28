@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   assessConversion,
+  assessUniversalConversion,
   convertReplay,
+  convertUniversalReplay,
   detectReplayFormat,
   listAvailableExports,
 } from '../lib/replay/conversion';
@@ -94,6 +96,36 @@ test('blocks conversion when required extension events would be lost', async () 
   const assessment = assessConversion(changed, 'gdr2');
   assert.equal(assessment.decision, 'blocked');
   assert.ok(assessment.issues.some((issue) => issue.code === 'GDR2_CRITICAL_EXTENSION'));
+});
+
+test('universal downloads convert input macros with source-specific corrections to every exporter', async () => {
+  const replay = await parsedFixture();
+  const extraTick = replay.durationTicks ?? replay.events.at(-1)?.tick ?? '0';
+  const changed = validateCanonicalReplay({
+    ...replay,
+    events: [...replay.events, {
+      tick: extraTick,
+      order: 999_998,
+      kind: 'player-state',
+      player: 1,
+      x: 12.5,
+      y: 3,
+    }, {
+      tick: extraTick,
+      order: 999_999,
+      kind: 'extension',
+      namespace: 'source-tool',
+      eventType: 'correction-data',
+      critical: true,
+      payload: { value: true },
+    }],
+  });
+  const exporters = formatRegistry.filter((format) => format.exporter);
+  assert.ok(exporters.every((format) => assessUniversalConversion(changed, format.id).decision === 'allowed'));
+  for (const format of exporters) {
+    const converted = await convertUniversalReplay(changed, format.id);
+    assert.ok(converted.artifact.bytes.byteLength > 0, `${format.displayName} output was empty`);
+  }
 });
 
 test('blocks unknown tools unless the server resolves a live compatibility policy', async () => {

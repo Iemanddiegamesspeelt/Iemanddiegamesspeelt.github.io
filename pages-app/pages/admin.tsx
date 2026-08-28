@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import type { ProfileRow } from '../lib/types';
 import { useAsync } from '../lib/use-async';
 
-type MacroReport = { id: string; macro_id: string; status: 'working' | 'broken' | 'outdated'; details: string | null; created_at: string; macro?: { title: string; working_votes?: number; broken_votes?: number; outdated_votes?: number }; reporter?: { username: string } };
+type MacroReport = { id: string; macro_id: string; status: 'working' | 'broken' | 'outdated'; details: string | null; created_at: string; macro?: { title: string; working_votes?: number; broken_votes?: number; outdated_votes?: number; community_flagged_at?: string | null }; reporter?: { username: string } };
 type CommentReport = { id: string; comment_id: string; reason: string; created_at: string; comment?: { body: string; macro_id: string; author?: { username: string } }; reporter?: { username: string } };
 
 export function AdminPage() {
@@ -26,7 +26,12 @@ export function AdminPage() {
     if (macroReports.error) throw macroReports.error;
     if (commentReports.error) throw commentReports.error;
     if (users.error) throw users.error;
-    return { macroReports: (macroReports.data ?? []) as unknown as MacroReport[], commentReports: (commentReports.data ?? []) as unknown as CommentReport[], users: (users.data ?? []) as ProfileRow[] };
+    const reviewableMacros = ((macroReports.data ?? []) as unknown as MacroReport[])
+      .filter((report) => report.status !== 'working' && Boolean(report.macro?.community_flagged_at));
+    const now = Date.now();
+    const restrictedUsers = ((users.data ?? []) as ProfileRow[])
+      .filter((person) => Boolean(person.banned_at || (person.restricted_until && Date.parse(person.restricted_until) > now)));
+    return { macroReports: reviewableMacros, commentReports: (commentReports.data ?? []) as unknown as CommentReport[], users: restrictedUsers };
   }, [allowed]);
 
   async function macroAction(report: MacroReport, status: 'working' | 'unverified' | 'broken' | 'possibly_outdated' | 'removed') {

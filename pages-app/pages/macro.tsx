@@ -2,8 +2,8 @@ import { AlertTriangle, CheckCircle2, Download, Flag, Heart, LoaderCircle, Messa
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { analyzeReplay } from '../../lib/replay/analyze';
-import { assessConversion, convertReplay } from '../../lib/replay/conversion';
-import { formatCompatibilityRegistry, formatRegistry, replayToolRegistry } from '../../lib/replay/registry';
+import { assessUniversalConversion, convertUniversalReplay } from '../../lib/replay/conversion';
+import { formatRegistry } from '../../lib/replay/registry';
 import { validateCanonicalReplay } from '../../lib/replay/schema';
 import type { CanonicalReplayV1 } from '../../lib/replay/types';
 import { formatGeometryDashVersion } from '../../lib/utils';
@@ -45,17 +45,14 @@ export function MacroPage() {
     if (!data) return [];
     return formatRegistry
       .filter((format) => Boolean(format.exporter))
-      .map((format) => ({ format, assessment: assessConversion(data.replay, format.id) }));
+      .map((format) => ({ format, assessment: assessUniversalConversion(data.replay, format.id) }));
   }, [data]);
-  const tools = useMemo(() => replayToolRegistry.filter((tool) => formatCompatibilityRegistry.some((entry) => entry.replayToolId === tool.id && formatRegistry.some((format) => format.id === entry.formatId && format.exporter) && entry.verification !== 'unknown' && (entry.direction === 'import' || entry.direction === 'both'))), []);
 
   async function download(formatId: string) {
     if (!data) return;
     setBusy(formatId); setActionError('');
     try {
-      const assessment = assessConversion(data.replay, formatId);
-      const requiredIssues = assessment.issues.filter((issue) => issue.requiresAcknowledgement);
-      const result = await convertReplay(data.replay, formatId, { acknowledgedIssueCodes: requiredIssues.map((issue) => issue.code) });
+      const result = await convertUniversalReplay(data.replay, formatId);
       downloadArtifact(result.artifact);
       void recordDownload(data.macro.id, formatId);
     } catch (caught) { setActionError(caught instanceof Error ? caught.message : 'The conversion failed.'); }
@@ -78,7 +75,7 @@ export function MacroPage() {
         <Timeline replay={data.replay} />
         <section className="rounded-[28px] border border-white/[.075] bg-[#0e1118] p-6 sm:p-8"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-violet-300">Downloads</p><h2 className="mt-2 text-2xl font-semibold">Download in any format</h2><p className="mt-2 text-xs text-zinc-600">Choose any implemented output format below.</p></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{formats.map(({ format, assessment }) => <article key={format.id} className={`rounded-[20px] border p-4 ${assessment.decision === 'allowed' ? 'border-white/[.07] bg-white/[.018]' : 'border-white/[.045] bg-white/[.01] opacity-60'}`}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">{format.displayName}</h3><p className="mt-1 text-xs text-zinc-600">{format.extensions.join(', ')}</p></div><CheckCircle2 className="h-4 w-4 text-emerald-300" /></div><button disabled={assessment.decision === 'blocked' || Boolean(busy)} onClick={() => void download(format.id)} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet-500 text-xs font-semibold hover:bg-violet-400 disabled:opacity-35">{busy === format.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}Download</button></article>)}</div></section>
         <Comments macroId={id} comments={data.comments} onChanged={reload} />
-      </div><aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><div className="grid grid-cols-2 gap-3"><Metric label="Downloads" value={macro.download_count.toLocaleString()} /><Metric label="Likes" value={macro.like_count.toLocaleString()} /></div>{user ? <button type="button" disabled={Boolean(busy)} onClick={() => void like()} className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold ${liked ? 'border-rose-400/20 bg-rose-400/[.09] text-rose-200' : 'border-white/[.08] bg-white/[.04] text-zinc-300'}`}><Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />{liked ? 'Liked' : 'Like macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${id}`)}`} className="mt-4 flex h-11 items-center justify-center rounded-xl bg-white/[.05] text-xs font-semibold">Sign in to like</Link>}</section><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><h2 className="text-sm font-semibold">Works with</h2><div className="mt-4 flex flex-wrap gap-2">{tools.map((tool) => <span key={tool.id} className="rounded-lg border border-white/[.07] bg-white/[.03] px-2.5 py-1.5 text-[10px] text-zinc-400">{tool.displayName}</span>)}</div></section><ReportMacro macro={macro} /></aside></div>
+      </div><aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><div className="grid grid-cols-2 gap-3"><Metric label="Downloads" value={macro.download_count.toLocaleString()} /><Metric label="Likes" value={macro.like_count.toLocaleString()} /></div>{user ? <button type="button" disabled={Boolean(busy)} onClick={() => void like()} className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold ${liked ? 'border-rose-400/20 bg-rose-400/[.09] text-rose-200' : 'border-white/[.08] bg-white/[.04] text-zinc-300'}`}><Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />{liked ? 'Liked' : 'Like macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${id}`)}`} className="mt-4 flex h-11 items-center justify-center rounded-xl bg-white/[.05] text-xs font-semibold">Sign in to like</Link>}</section><ReportMacro macro={macro} /></aside></div>
     {actionError && <div role="alert" className="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100%-2rem)] -translate-x-1/2 gap-2 rounded-xl border border-rose-400/20 bg-[#171019] px-4 py-3 text-xs text-rose-200 shadow-2xl"><AlertTriangle className="h-4 w-4 shrink-0" />{actionError}</div>}
   </main>;
 }

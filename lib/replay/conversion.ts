@@ -159,6 +159,55 @@ export function listAvailableExports(replay: CanonicalReplayV1, replayToolId?: s
     .filter((item) => item.assessment.decision === 'allowed');
 }
 
+export function prepareUniversalExport(
+  replayInput: CanonicalReplayV1,
+  targetFormatId: string,
+): CanonicalReplayV1 {
+  const replay = validateCanonicalReplay(replayInput);
+  if (targetFormatId === 'macrohub-json') return replay;
+
+  const inputs = replay.events
+    .filter((event): event is Extract<CanonicalReplayV1['events'][number], { kind: 'input' }> => event.kind === 'input')
+    .sort((left, right) => {
+      const tickOrder = BigInt(left.tick) < BigInt(right.tick) ? -1 : BigInt(left.tick) > BigInt(right.tick) ? 1 : 0;
+      if (tickOrder) return tickOrder;
+      if (left.player !== right.player) return left.player - right.player;
+      return left.order - right.order;
+    })
+    .map((event, order) => ({ ...event, order }));
+  const lastTick = inputs.reduce((maximum, event) => BigInt(event.tick) > maximum ? BigInt(event.tick) : maximum, 0n);
+  const sourceMode = replay.extensions?.['geometry-dash/mode'];
+  const explicitPlatformer = sourceMode && typeof sourceMode === 'object' && !Array.isArray(sourceMode)
+    && typeof sourceMode.platformer === 'boolean'
+    ? sourceMode.platformer
+    : null;
+  const platformer = explicitPlatformer
+    ?? inputs.some((event) => event.control.kind === 'left' || event.control.kind === 'right');
+
+  return validateCanonicalReplay({
+    ...replay,
+    durationTicks: lastTick.toString(),
+    events: inputs,
+    extensions: { 'geometry-dash/mode': { platformer } },
+  });
+}
+
+export function assessUniversalConversion(replay: CanonicalReplayV1, targetFormatId: string): ExportAssessment {
+  return assessConversion(prepareUniversalExport(replay, targetFormatId), targetFormatId);
+}
+
+export async function convertUniversalReplay(
+  replay: CanonicalReplayV1,
+  targetFormatId: string,
+): Promise<{ artifact: ExportArtifact; assessment: ExportAssessment }> {
+  const portable = prepareUniversalExport(replay, targetFormatId);
+  const assessment = assessConversion(portable, targetFormatId);
+  const acknowledgedIssueCodes = assessment.issues
+    .filter((issue) => issue.requiresAcknowledgement)
+    .map((issue) => issue.code);
+  return convertReplay(portable, targetFormatId, { acknowledgedIssueCodes });
+}
+
 export class ConversionBlockedError extends Error {
   constructor(public readonly issues: ConversionIssue[]) {
     super(issues.map((issue) => issue.message).join(' '));

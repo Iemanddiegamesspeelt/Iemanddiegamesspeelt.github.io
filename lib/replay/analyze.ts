@@ -1,4 +1,4 @@
-import { assessConversion } from './conversion';
+import { assessUniversalConversion } from './conversion';
 import { formatCompatibilityRegistry, formatRegistry } from './registry';
 import type { CanonicalReplayV1 } from './types';
 import { formatGeometryDashVersion } from '../utils';
@@ -12,7 +12,7 @@ export function analyzeReplay(replay: CanonicalReplayV1) {
   const targets = formatRegistry
     .filter((format) => Boolean(format.exporter))
     .map((format) => {
-      const assessment = assessConversion(replay, format.id);
+      const assessment = assessUniversalConversion(replay, format.id);
       return {
         id: format.id,
         name: format.displayName,

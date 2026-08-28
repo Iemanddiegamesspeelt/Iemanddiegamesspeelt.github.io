@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { convertReplay } from '../../lib/replay/conversion';
+import { convertUniversalReplay } from '../../lib/replay/conversion';
 import { formatRegistry } from '../../lib/replay/registry';
 import type { CanonicalReplayV1, ExportArtifact } from '../../lib/replay/types';
 
@@ -15,15 +15,13 @@ export function downloadArtifact(artifact: ExportArtifact) {
   window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
 }
 
-export async function buildReplayZip(replay: CanonicalReplayV1, targetIds: string[], acknowledgedIssueCodes: string[] = []) {
+export async function buildReplayZip(replay: CanonicalReplayV1, targetIds: string[]) {
   const zip = new JSZip();
   const failures: string[] = [];
   let count = 0;
   for (const targetId of targetIds) {
     try {
-      const { artifact } = await convertReplay(replay, targetId, {
-        acknowledgedIssueCodes,
-      });
+      const { artifact } = await convertUniversalReplay(replay, targetId);
       const format = formatRegistry.find((item) => item.id === targetId);
       zip.file(`${format?.shortName ?? targetId}-${artifact.filename}`, artifact.bytes);
       count += 1;

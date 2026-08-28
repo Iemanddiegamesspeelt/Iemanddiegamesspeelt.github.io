@@ -1,7 +1,7 @@
 import { AlertTriangle, Archive, CheckCircle2, Download, FileUp, LoaderCircle, RotateCcw } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { analyzeReplay } from '../../lib/replay/analyze';
-import { assessConversion, convertReplay } from '../../lib/replay/conversion';
+import { assessUniversalConversion, convertUniversalReplay } from '../../lib/replay/conversion';
 import { formatRegistry } from '../../lib/replay/registry';
 import type { CanonicalReplayV1 } from '../../lib/replay/types';
 import { validateUpload } from '../../lib/security/upload';
@@ -24,7 +24,7 @@ export function ConverterPage() {
     if (!loaded) return [];
     return formatRegistry
       .filter((format) => Boolean(format.exporter))
-      .map((format) => ({ format, assessment: assessConversion(loaded.replay, format.id) }));
+      .map((format) => ({ format, assessment: assessUniversalConversion(loaded.replay, format.id) }));
   }, [loaded]);
 
   async function load(file: File) {
@@ -45,10 +45,7 @@ export function ConverterPage() {
     if (!loaded) return;
     setBusy(targetId); setError('');
     try {
-      const assessment = assessConversion(loaded.replay, targetId);
-      const requiredIssues = assessment.issues.filter((issue) => issue.requiresAcknowledgement);
-      const acknowledgedIssueCodes = requiredIssues.map((issue) => issue.code);
-      const result = await convertReplay(loaded.replay, targetId, { acknowledgedIssueCodes });
+      const result = await convertUniversalReplay(loaded.replay, targetId);
       downloadArtifact(result.artifact);
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Conversion failed.'); }
     finally { setBusy(''); }
@@ -59,8 +56,7 @@ export function ConverterPage() {
     setBusy('zip'); setError('');
     try {
       const ids = formats.filter((entry) => entry.assessment.decision === 'allowed').map((entry) => entry.format.id);
-      const requiredIssues = [...new Map(formats.filter((entry) => entry.assessment.decision === 'allowed').flatMap((entry) => entry.assessment.issues).filter((issue) => issue.requiresAcknowledgement).map((issue) => [issue.code, issue])).values()];
-      const result = await buildReplayZip(loaded.replay, ids, requiredIssues.map((issue) => issue.code));
+      const result = await buildReplayZip(loaded.replay, ids);
       if (!result.count) throw new Error('No safe conversions could be generated for this replay.');
       downloadBlob(result.blob, `${safeBaseName(loaded.file.name)}-formats.zip`);
       if (result.failures.length) setError(`${result.failures.length} format${result.failures.length === 1 ? '' : 's'} could not be included because validation failed.`);
