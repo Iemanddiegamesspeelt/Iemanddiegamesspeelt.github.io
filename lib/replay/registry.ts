@@ -54,12 +54,12 @@ import {
 export const formatRegistry: readonly MacroFormatDefinition[] = [
   {
     id: 'macrohub-json',
-    displayName: 'MacroHub Replay v1',
+    displayName: 'MacroHub Replay v2',
     shortName: 'MacroHub',
-    extensions: ['.macrohub', '.macrohub.json'],
-    mediaTypes: ['application/vnd.macrohub.replay+gzip', 'application/vnd.macrohub.replay+json', 'application/json'],
+    extensions: ['.macrohub'],
+    mediaTypes: ['application/vnd.macrohub.replay'],
     status: 'implemented',
-    summary: 'Gzip-compressed, versioned, lossless canonical replay with strict validation.',
+    summary: 'Delta-packed MessagePack and gzip container preserving the complete canonical replay losslessly.',
     parser: macroHubJsonParser,
     exporter: macroHubJsonExporter,
   },

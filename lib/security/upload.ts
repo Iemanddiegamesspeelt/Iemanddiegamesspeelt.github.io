@@ -34,7 +34,7 @@ export function sanitizeFilename(filename: string): string {
 
 function extensionOf(filename: string): string {
   const lower = filename.toLowerCase();
-  for (const extension of ['.macrohub.json', '.macrohub', '.gdr.json', '.mhr.json', '.echo.json']) {
+  for (const extension of ['.macrohub', '.gdr.json', '.mhr.json', '.echo.json']) {
     if (lower.endsWith(extension)) return extension;
   }
   const dot = lower.lastIndexOf('.');

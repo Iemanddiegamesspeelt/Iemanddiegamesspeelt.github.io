@@ -50,7 +50,7 @@ export function UploadPage() {
     const description = String(form.get('description') ?? '').trim();
     const macroId = crypto.randomUUID();
     const originalPath = `${user.id}/${macroId}/original${ready.sourceFormat.extension}`;
-    const canonicalPath = `${user.id}/${macroId}/canonical.macrohub.json`;
+    const canonicalPath = `${user.id}/${macroId}/canonical.replay.json`;
     const client = supabase();
     let originalUploaded = false;
     let canonicalUploaded = false;
@@ -61,7 +61,7 @@ export function UploadPage() {
       const { error: originalError } = await client.storage.from('macrohub-files').upload(originalPath, ready.file, { upsert: false, contentType: ready.file.type || 'application/octet-stream' });
       if (originalError) throw originalError;
       originalUploaded = true;
-      const canonicalBlob = new Blob([stableStringify(ready.replay)], { type: 'application/vnd.macrohub.replay+json' });
+      const canonicalBlob = new Blob([stableStringify(ready.replay)], { type: 'application/json' });
       const { error: canonicalError } = await client.storage.from('macrohub-files').upload(canonicalPath, canonicalBlob, { upsert: false, contentType: canonicalBlob.type });
       if (canonicalError) throw canonicalError;
       canonicalUploaded = true;

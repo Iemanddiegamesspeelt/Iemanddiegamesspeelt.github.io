@@ -11,7 +11,8 @@ import {
 import { gdr2Exporter, gdr2Parser } from '../lib/replay/formats/gdr2';
 import { macroHubJsonParser } from '../lib/replay/formats/macrohub-json';
 import { formatRegistry } from '../lib/replay/registry';
-import { validateCanonicalReplay } from '../lib/replay/schema';
+import { createDemoReplay } from '../lib/replay/sample';
+import { stableStringify, validateCanonicalReplay } from '../lib/replay/schema';
 
 // CC0 replay fixture from the Eclipse community macro repository.
 const ECLIPSE_STEREO_MADNESS = 'R0RSAgANU292ZW5va0hhY2tlcgBCqHd3AEBuAAAAAAAAAAAAAApFY2xpcHNlQm90AQEOU3RlcmVvIE1hZG5lc3MAAJgBA7SlAegIlEzDBVSZBUiBBeIDxwcyiQEyzwMypwIomQJAzwJAxwKsB7UCOscCQOcFQKEBOqUDOq0BOrsCOqcCzAa9G44B5wF6ZyxvMvUDrAGhB6AB2wGaAZUJmgG7C8YDrQTFAcABowHYAhWGAVtm2wRG0wI0pwY0bVSTAkhzWpsCRpsCOtkCTpMCPucBOocDLm3uA9sEOucEQOcCNPMBjgWVATj1AWylAXR1QPMDTp0CdJMDSIcBRntSiQFSiQFM9QJMdVLvAVKnAVphWo0BaMcCpgGlA2BVLE/mBuEB9AJ7sgOvAZgB+wFozQaaAw==';
@@ -40,29 +41,68 @@ test('round-trips the real GDR2 fixture byte for byte', async () => {
   assert.deepEqual(artifact.bytes, fixture);
 });
 
-test('converts GDR2 through the compressed MacroHub representation', async () => {
+test('converts GDR2 through the compact lossless MacroHub representation', async () => {
   const replay = await parsedFixture();
-  const converted = await convertReplay(replay, 'macrohub-json');
+  const detailed = validateCanonicalReplay({
+    ...replay,
+    extensions: {
+      ...replay.extensions,
+      'geometry-dash/level': {
+        id: '1',
+        name: 'Stereo Madness',
+        creator: 'RobTop',
+        difficulty: 'Easy',
+        demonDifficulty: null,
+        stars: 1,
+        length: 'Short',
+        gdVersion: '1.0',
+      },
+    },
+  });
+  const converted = await convertReplay(detailed, 'macrohub-json');
   assert.equal(converted.assessment.decision, 'allowed');
   assert.equal(converted.artifact.extension, '.macrohub');
-  assert.deepEqual([...converted.artifact.bytes.slice(0, 2)], [0x1f, 0x8b]);
-  assert.ok(converted.artifact.bytes.byteLength < new TextEncoder().encode(JSON.stringify(replay)).byteLength);
+  assert.deepEqual([...converted.artifact.bytes.slice(0, 6)], [0x4d, 0x48, 0x55, 0x42, 2, 1]);
+  assert.deepEqual([...converted.artifact.bytes.slice(6, 8)], [0x1f, 0x8b]);
+  const jsonBytes = new TextEncoder().encode(stableStringify(detailed));
+  const jsonGzip = new Uint8Array(await new Response(new Blob([jsonBytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  assert.ok(converted.artifact.bytes.byteLength < jsonGzip.byteLength, 'packed MacroHub v2 should beat compressed canonical JSON');
   const reparsed = await macroHubJsonParser.parse({
     bytes: converted.artifact.bytes,
     filename: converted.artifact.filename,
     mediaType: converted.artifact.mediaType,
   });
-  assert.deepEqual(reparsed.replay, replay);
+  assert.deepEqual(reparsed.replay, detailed);
+  assert.deepEqual(reparsed.replay.extensions?.['geometry-dash/level'], detailed.extensions?.['geometry-dash/level']);
 });
 
-test('still imports legacy uncompressed MacroHub JSON files', async () => {
+test('rejects removed uncompressed MacroHub JSON compatibility', async () => {
   const replay = await parsedFixture();
   const legacyBytes = new TextEncoder().encode(`${JSON.stringify(replay)}\n`);
-  const reparsed = await macroHubJsonParser.parse({
+  await assert.rejects(() => macroHubJsonParser.parse({
     bytes: legacyBytes,
     filename: 'legacy.macrohub.json',
     mediaType: 'application/vnd.macrohub.replay+json',
+  }));
+  assert.deepEqual(formatRegistry.find((format) => format.id === 'macrohub-json')?.extensions, ['.macrohub']);
+});
+
+test('compact MacroHub v2 materially improves large replay compression', async () => {
+  const replay = createDemoReplay({
+    levelId: '123456',
+    levelName: 'Compression test',
+    tps: 240,
+    durationSeconds: 120,
+    inputCount: 10_000,
+    gdVersion: '2.2081',
+    completion: 100,
+    player2: true,
   });
+  const converted = await convertReplay(replay, 'macrohub-json');
+  const jsonBytes = new TextEncoder().encode(stableStringify(replay));
+  const jsonGzip = new Uint8Array(await new Response(new Blob([jsonBytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  assert.ok(converted.artifact.bytes.byteLength < jsonGzip.byteLength * 0.75, 'MacroHub v2 should be at least 25% smaller than compressed canonical JSON');
+  const reparsed = await macroHubJsonParser.parse({ bytes: converted.artifact.bytes, filename: converted.artifact.filename });
   assert.deepEqual(reparsed.replay, replay);
 });
 

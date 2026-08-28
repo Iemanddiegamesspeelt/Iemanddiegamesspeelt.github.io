@@ -134,11 +134,11 @@ export async function POST(request: Request) {
     const difficulty = (trustedLevel?.difficulty.toUpperCase() ?? 'UNKNOWN') as 'AUTO' | 'EASY' | 'NORMAL' | 'HARD' | 'HARDER' | 'INSANE' | 'DEMON' | 'UNKNOWN';
     const demonDifficulty = trustedLevel?.demonDifficulty?.toUpperCase() as 'EASY' | 'MEDIUM' | 'HARD' | 'INSANE' | 'EXTREME' | undefined;
     const length = (trustedLevel?.length.toUpperCase() ?? 'UNKNOWN') as 'TINY' | 'SHORT' | 'MEDIUM' | 'LONG' | 'XL' | 'PLATFORMER' | 'UNKNOWN';
-    const canonicalStorageKey = randomStorageKey('canonical', '.macrohub.json');
+    const canonicalStorageKey = randomStorageKey('canonical', '.replay.json');
     const originalStorageKey = randomStorageKey('original', format.extensions[0]);
     const readyWrites = await Promise.allSettled([
       storage.put(canonicalStorageKey, canonicalObject.bytes, {
-        contentType: 'application/vnd.macrohub.replay+json',
+        contentType: 'application/json',
         metadata: { owner: appUser.id, state: 'ready', schema: '1' },
       }),
       storage.put(originalStorageKey, originalObject.bytes, {

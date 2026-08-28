@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     if (user) {
       uploadId = crypto.randomUUID();
       const originalKey = randomStorageKey('quarantine', detection.format.extensions[0]);
-      const canonicalKey = randomStorageKey('quarantine', '.macrohub.json');
+      const canonicalKey = randomStorageKey('quarantine', '.replay.json');
       const manifestKey = `quarantine/manifests/${uploadId}.json`;
       const canonicalBytes = new TextEncoder().encode(stableStringify(parsed.replay));
       const storage = getObjectStorage();
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         });
         writtenKeys.push(originalKey);
         await storage.put(canonicalKey, canonicalBytes, {
-          contentType: 'application/vnd.macrohub.replay+json',
+          contentType: 'application/json',
           metadata: { owner: user.userId, state: 'quarantine', schema: '1', expiresAt },
         });
         writtenKeys.push(canonicalKey);

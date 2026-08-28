@@ -54,7 +54,8 @@ export function MacroPage() {
     if (!data) return;
     setBusy(formatId); setActionError('');
     try {
-      const result = await convertUniversalReplay(data.replay, formatId);
+      const replay = formatId === 'macrohub-json' ? replayWithLevelCatalog(data.replay, data.macro) : data.replay;
+      const result = await convertUniversalReplay(replay, formatId);
       downloadArtifact(result.artifact);
       void recordDownload(data.macro.id, formatId);
     } catch (caught) { setActionError(caught instanceof Error ? caught.message : 'The conversion failed.'); }
@@ -94,6 +95,31 @@ export function MacroPage() {
       </div><aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-[24px] border border-white/[.075] bg-[#0e1118] p-5"><div className="grid grid-cols-2 gap-3"><Metric label="Downloads" value={macro.download_count.toLocaleString()} /><Metric label="Likes" value={macro.like_count.toLocaleString()} /></div>{user ? <button type="button" disabled={Boolean(busy)} onClick={() => void like()} className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-semibold ${liked ? 'border-rose-400/20 bg-rose-400/[.09] text-rose-200' : 'border-white/[.08] bg-white/[.04] text-zinc-300'}`}><Heart className={`h-4 w-4 ${liked ? 'fill-current' : ''}`} />{liked ? 'Liked' : 'Like macro'}</button> : <Link to={`/login?return_to=${encodeURIComponent(`/macro/${id}`)}`} className="mt-4 flex h-11 items-center justify-center rounded-xl bg-white/[.05] text-xs font-semibold">Sign in to like</Link>}{user?.id === macro.uploader_id && <button type="button" disabled={Boolean(busy)} onClick={() => void removeMacro()} className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/15 text-xs font-semibold text-rose-200 hover:bg-rose-400/[.06] disabled:opacity-40">{busy === 'delete' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Delete macro</button>}</section><ReportMacro macro={macro} /><MacroModerationReport macro={macro} /></aside></div>
     {actionError && <div role="alert" className="fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100%-2rem)] -translate-x-1/2 gap-2 rounded-xl border border-rose-400/20 bg-[#171019] px-4 py-3 text-xs text-rose-200 shadow-2xl"><AlertTriangle className="h-4 w-4 shrink-0" />{actionError}</div>}
   </main>;
+}
+
+function replayWithLevelCatalog(replay: CanonicalReplayV1, macro: MacroRow): CanonicalReplayV1 {
+  const level = macro.level;
+  if (!level) return replay;
+  return validateCanonicalReplay({
+    ...replay,
+    level: {
+      id: replay.level.id ?? { value: level.id, provenance: { kind: 'level-provider' as const } },
+      name: replay.level.name ?? { value: level.name, provenance: { kind: 'level-provider' as const } },
+    },
+    extensions: {
+      ...replay.extensions,
+      'geometry-dash/level': {
+        id: level.id,
+        name: level.name,
+        creator: level.creator,
+        difficulty: level.difficulty,
+        demonDifficulty: level.demon_difficulty,
+        stars: level.stars,
+        length: level.length,
+        geometryDashVersion: level.gd_version,
+      },
+    },
+  });
 }
 
 function Timeline({ replay }: { replay: CanonicalReplayV1 }) {
