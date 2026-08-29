@@ -10,7 +10,7 @@ export async function listMacros(limit = 200): Promise<MacroRow[]> {
 }
 
 export async function listLevels(limit = 200): Promise<LevelRow[]> {
-  const { data, error } = await supabase().from('levels').select('*').order('total_downloads', { ascending: false }).limit(limit);
+  const { data, error } = await supabase().from('levels').select('*').gt('macro_count', 0).order('total_downloads', { ascending: false }).limit(limit);
   if (error) throw error;
   return (data ?? []) as LevelRow[];
 }
