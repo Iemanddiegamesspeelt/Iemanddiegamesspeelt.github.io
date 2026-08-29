@@ -98,7 +98,7 @@ const canonicalReplaySchema = z
 
 export class ReplayValidationError extends Error {
   constructor(public readonly problems: string[]) {
-    super('Replay validation failed');
+    super(problems[0] ? `Replay validation failed: ${problems[0]}` : 'Replay validation failed');
     this.name = 'ReplayValidationError';
   }
 }

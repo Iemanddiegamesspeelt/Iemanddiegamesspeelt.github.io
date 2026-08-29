@@ -1,10 +1,11 @@
-import { assessUniversalConversion } from './conversion';
+import { assessConversion, prepareUniversalExport } from './conversion';
 import { formatCompatibilityRegistry, formatRegistry } from './registry';
 import type { CanonicalReplayV1 } from './types';
 import { formatGeometryDashVersion } from '../utils';
 
 export function analyzeReplay(replay: CanonicalReplayV1) {
   const inputEvents = replay.events.filter((event) => event.kind === 'input');
+  const portableReplay = prepareUniversalExport(replay, 'gdr');
   const player1Inputs = inputEvents.filter((event) => event.player === 1).length;
   const player2Inputs = inputEvents.filter((event) => event.player === 2).length;
   const rate = Number(BigInt(replay.clock.ticksPerSecond.numerator)) / Number(BigInt(replay.clock.ticksPerSecond.denominator));
@@ -12,7 +13,7 @@ export function analyzeReplay(replay: CanonicalReplayV1) {
   const targets = formatRegistry
     .filter((format) => Boolean(format.exporter))
     .map((format) => {
-      const assessment = assessUniversalConversion(replay, format.id);
+      const assessment = assessConversion(format.id === 'macrohub-json' ? replay : portableReplay, format.id);
       return {
         id: format.id,
         name: format.displayName,

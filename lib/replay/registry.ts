@@ -24,7 +24,8 @@ import {
   xdbotParser,
   zbotParser,
 } from './formats/simple';
-import { omegaBot2Parser, replayEngine3Parser, ybotParser } from './formats/versioned';
+import { omegaBot2Parser, ybotParser } from './formats/versioned';
+import { replayEngine4Exporter, replayEngine4Parser } from './formats/replay-engine4';
 import { tcmParser } from './formats/tcm';
 import { gdmoParser } from './formats/gdmo';
 import {
@@ -40,7 +41,6 @@ import {
   mhrJsonExporter,
   omegaBot2Exporter,
   replayBotExporter,
-  replayEngine3Exporter,
   rushExporter,
   slcExporter,
   tasbotJsonExporter,
@@ -295,15 +295,15 @@ export const formatRegistry: readonly MacroFormatDefinition[] = [
     exporter: gdmoExporter,
   },
   {
-    id: 'replayengine3',
-    displayName: 'RE3',
-    shortName: 'RE3',
-    extensions: ['.re3'],
+    id: 'replayengine4',
+    displayName: 'RE4',
+    shortName: 'RE4',
+    extensions: ['.re4'],
     mediaTypes: ['application/octet-stream'],
     status: 'implemented',
-    summary: 'ReplayEngine 3 Windows x64 native-layout import and export.',
-    parser: replayEngine3Parser,
-    exporter: replayEngine3Exporter,
+    summary: 'Current GDH Replay Engine v4 binary replay.',
+    parser: replayEngine4Parser,
+    exporter: replayEngine4Exporter,
   },
 
 ] as const;
@@ -311,6 +311,7 @@ export const formatRegistry: readonly MacroFormatDefinition[] = [
 export const replayToolRegistry: readonly ReplayToolDefinition[] = [
   { id: 'eclipse', displayName: 'Eclipse Menu', status: 'active', summary: 'Modern mod menu with replay playback using GDR2.' },
   { id: 'openhack', displayName: 'OpenHack', status: 'active', summary: 'Open-source mod menu with its own replay engine integration.' },
+  { id: 'gdh', displayName: 'GDH', status: 'active', summary: 'Geometry Dash mod menu with Replay Engine v4.' },
   { id: 'prism-menu', displayName: 'Prism Menu', status: 'active', summary: 'Mod menu tracked independently from its replay formats.' },
   { id: 'quartz', displayName: 'Quartz', status: 'active', summary: 'Replay tool with version-specific GDR compatibility.' },
   { id: 'silicate', displayName: 'Silicate', status: 'active', summary: 'Replay tool and converter associated with the SLC format family.' },
@@ -416,7 +417,7 @@ export const formatCompatibilityRegistry: readonly FormatCompatibility[] = [
     verification: 'community-reported',
     notes: 'MacroHub generates the versioned yBot action layout.',
   },
-  { formatId: 'replayengine3', replayToolId: 'openhack', direction: 'both', support: 'native', verification: 'community-reported', notes: 'Version-specific relation.' },
+  { formatId: 'replayengine4', replayToolId: 'gdh', direction: 'both', support: 'native', verification: 'verified', recommended: true, notes: 'Official GDH Replay Engine v4 format.' },
   { formatId: 'gdr', replayToolId: 'prism-menu', direction: 'import', support: 'partial', verification: 'community-reported', notes: 'Verify against the installed Prism Menu version.' },
   { formatId: 'gdr', replayToolId: 'quartz', direction: 'both', support: 'native', verification: 'community-reported', notes: 'Version-specific relation.' },
   { formatId: 'slc', replayToolId: 'silicate', direction: 'both', support: 'native', verification: 'community-reported', notes: 'SLC itself has multiple versions and extensions.' },

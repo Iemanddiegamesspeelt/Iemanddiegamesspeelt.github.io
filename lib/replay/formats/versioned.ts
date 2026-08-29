@@ -1,6 +1,6 @@
 import type { MacroParser } from '../interfaces';
 import { ReplayValidationError } from '../schema';
-import type { ImportedExtraEvent, ImportedInput, ImportedPlayerState } from './import-utils';
+import type { ImportedExtraEvent, ImportedInput } from './import-utils';
 import {
   MAX_IMPORTED_EVENTS,
   ReplayBinaryReader,
@@ -144,70 +144,4 @@ export const omegaBot2Parser: MacroParser = {
     catch { return { confidence: 'none', reason: 'No OmegaBot v2 schema' }; }
   },
   async parse(input) { return parseOmegaBot2(input.bytes); },
-};
-
-function checkedExpectedLength(counts: number[]): number {
-  const [p1Frames, p2Frames, p1Inputs, p2Inputs] = counts;
-  const expected = 20 + 32 * (p1Frames! + p2Frames!) + 16 * (p1Inputs! + p2Inputs!);
-  if (!Number.isSafeInteger(expected)) throw new ReplayValidationError(['ReplayEngine 3 declared size exceeds safe bounds']);
-  return expected;
-}
-
-async function parseReplayEngine3(bytes: Uint8Array) {
-  const reader = new ReplayBinaryReader(bytes);
-  if (reader.length < 20) throw new ReplayValidationError(['ReplayEngine 3 header is truncated']);
-  const rate = positiveRate(reader.readF32LE(), 'ReplayEngine 3 FPS');
-  const counts = [reader.readU32LE(), reader.readU32LE(), reader.readU32LE(), reader.readU32LE()];
-  if (counts.reduce((sum, count) => sum + count, 0) > MAX_IMPORTED_EVENTS) throw new ReplayValidationError(['ReplayEngine 3 contains too many records']);
-  if (checkedExpectedLength(counts) !== bytes.byteLength) throw new ReplayValidationError(['ReplayEngine 3 record sizes do not match the file length']);
-  const playerStates: ImportedPlayerState[] = [];
-  const extraEvents: ImportedExtraEvent[] = [];
-  for (let section = 0; section < 2; section += 1) {
-    const player = section === 0 ? 1 : 2;
-    for (let index = 0; index < counts[section]!; index += 1) {
-      const frame = reader.readU32LE();
-      const x = reader.readF32LE();
-      const y = reader.readF32LE();
-      const rotation = reader.readF32LE();
-      const yAcceleration = reader.readF64LE();
-      const playerTwo = reader.readU8();
-      const padding = reader.readBytes(7);
-      if (playerTwo > 1 || playerTwo !== section) throw new ReplayValidationError([`ReplayEngine 3 frame ${index} has the wrong player flag`]);
-      if (![x, y, rotation, yAcceleration].every(Number.isFinite)) throw new ReplayValidationError([`ReplayEngine 3 frame ${index} contains non-finite physics data`]);
-      playerStates.push({ tick: BigInt(frame), player, x, y, rotation });
-      if (yAcceleration !== 0 || padding.some((byte) => byte !== 0)) {
-        extraEvents.push({ tick: BigInt(frame), kind: 'extension', namespace: 'replayengine3', eventType: 'frame-physics', critical: true, payload: { yAcceleration, padding: Array.from(padding) } });
-      }
-    }
-  }
-  const inputs: ImportedInput[] = [];
-  for (let section = 0; section < 2; section += 1) {
-    const player = section === 0 ? 1 : 2;
-    for (let index = 0; index < counts[section + 2]!; index += 1) {
-      const frame = reader.readU32LE();
-      const down = reader.readU8();
-      const paddingA = reader.readBytes(3);
-      const button = reader.readI32LE();
-      const playerOne = reader.readU8();
-      const paddingB = reader.readBytes(3);
-      if (down > 1 || playerOne > 1 || playerOne !== (section === 0 ? 1 : 0) || button < 1 || button > 3) {
-        throw new ReplayValidationError([`ReplayEngine 3 input ${index} contains an invalid field`]);
-      }
-      inputs.push({
-        tick: BigInt(frame), player, button, down: down === 1,
-        ...([...paddingA, ...paddingB].some((byte) => byte !== 0) ? { extension: { namespace: 'replayengine3', eventType: 'input-padding', critical: true, payload: { before: Array.from(paddingA), after: Array.from(paddingB) } } } : {}),
-      });
-    }
-  }
-  return buildImportedReplay({ formatId: 'replayengine3', parserVersion: VERSION, bytes, ticksPerSecond: rate, replayVersion: '3', inputs, playerStates, extraEvents });
-}
-
-export const replayEngine3Parser: MacroParser = {
-  implementationVersion: VERSION,
-  async probe(input) {
-    if (!/\.re3$/i.test(input.filename)) return { confidence: 'none', reason: 'Not a ReplayEngine 3 filename' };
-    try { await parseReplayEngine3(input.bytes); return { confidence: 'exact', reason: 'Valid ReplayEngine 3 native-layout replay' }; }
-    catch { return { confidence: 'possible', reason: 'RE3 extension found, but its records are invalid' }; }
-  },
-  async parse(input) { return parseReplayEngine3(input.bytes); },
 };

@@ -1,5 +1,4 @@
 import { encode } from '@msgpack/msgpack';
-import type { MacroExporter } from '../interfaces';
 import type { CanonicalReplayV1, ReplayEvent } from '../types';
 import {
   ReplayBinaryWriter,
@@ -10,10 +9,8 @@ import {
   inputEvents,
   jsonBytes,
   makeExporter,
-  playerStateEvents,
   replayRate,
   safeBaseName,
-  verifyInputRoundTrip,
   zbotTimingPair,
 } from './export-utils';
 
@@ -406,52 +403,4 @@ export const gdmoExporter = makeExporter(
     writer.writeU32LE(0);
     return artifact(replay, '.macro', 'application/octet-stream', writer.finish());
   },
-);
-
-function re3Rank(event: ReplayEvent): number {
-  if (event.kind === 'player-state') return event.player === 1 ? 0 : 1;
-  if (event.kind === 'input') return event.player === 1 ? 2 : 3;
-  return 0;
-}
-
-export const replayEngine3Exporter: MacroExporter = makeExporter(
-  VERSION,
-  (replay) => assessment(replay, 'RE3', 'RE3', {
-    controls: 'all', rate: 'f32', maxFrame: U32_MAX, playerStates: 're3', orderRank: re3Rank,
-  }),
-  async (replay) => {
-    const states = [
-      playerStateEvents(replay).filter((event) => event.player === 1),
-      playerStateEvents(replay).filter((event) => event.player === 2),
-    ];
-    const inputs = [
-      inputEvents(replay).filter((event) => event.player === 1),
-      inputEvents(replay).filter((event) => event.player === 2),
-    ];
-    const writer = new ReplayBinaryWriter();
-    writer.writeF32LE(replayRate(replay));
-    writer.writeU32LE(states[0].length);
-    writer.writeU32LE(states[1].length);
-    writer.writeU32LE(inputs[0].length);
-    writer.writeU32LE(inputs[1].length);
-    states.forEach((group, groupIndex) => group.forEach((event) => {
-      writer.writeU32LE(checkedFrame(event));
-      writer.writeF32LE(event.x!);
-      writer.writeF32LE(event.y!);
-      writer.writeF32LE(event.rotation!);
-      writer.writeF64LE(0);
-      writer.writeU8(groupIndex);
-      writer.writeBytes(new Uint8Array(7));
-    }));
-    inputs.forEach((group, groupIndex) => group.forEach((event) => {
-      writer.writeU32LE(checkedFrame(event));
-      writer.writeU8(event.state === 'press' ? 1 : 0);
-      writer.writeBytes(new Uint8Array(3));
-      writer.writeI32LE(controlButton(event) ?? 1);
-      writer.writeU8(groupIndex === 0 ? 1 : 0);
-      writer.writeBytes(new Uint8Array(3));
-    }));
-    return artifact(replay, '.re3', 'application/octet-stream', writer.finish());
-  },
-  (source, reparsed) => verifyInputRoundTrip(source, reparsed, { playerStates: true }),
 );

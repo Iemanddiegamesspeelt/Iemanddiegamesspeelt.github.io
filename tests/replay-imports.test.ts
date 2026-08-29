@@ -62,9 +62,10 @@ function omegaBot2() {
   return new Bytes().f32(240).f32(240).u32(1).u64(0).u64(1).u32(1).u32(5).u32(2).done();
 }
 
-function replayEngine3() {
-  return new Bytes().f32(240).u32(0).u32(0).u32(1).u32(0)
-    .u32(5).u8(1).zeros(3).i32(1).u8(1).zeros(3).done();
+function replayEngine4() {
+  return new Bytes().ascii('RE4').f32(240).u64(1)
+    .u64(5).f32(12.5).f32(3).f64(-1.25).u8(0)
+    .u64(1).u64(5).u8(1).i32(1).u8(0).done();
 }
 
 function slc1() { return new Bytes().f64(240).u32(1).u32((5 << 4) | (1 << 1) | 1).done(); }
@@ -111,7 +112,7 @@ const fixtures: Array<{ id: string; filename: string; bytes: Uint8Array; expecte
   { id: 'replaybot', filename: 'fixture.replay', bytes: replaybot(), expectedInputs: 1 },
   { id: 'omegabot-replay', filename: 'fixture.replay', bytes: omegaBot2(), expectedInputs: 1 },
   { id: 'ybot', filename: 'fixture.ybot', bytes: ybot(), expectedInputs: 1 },
-  { id: 'replayengine3', filename: 'fixture.re3', bytes: replayEngine3(), expectedInputs: 1 },
+  { id: 'replayengine4', filename: 'fixture.re4', bytes: replayEngine4(), expectedInputs: 1 },
   { id: 'slc', filename: 'fixture.slc', bytes: slc1(), expectedInputs: 1 },
   { id: 'slc', filename: 'fixture.slc', bytes: slc2(), expectedInputs: 1 },
   { id: 'slc', filename: 'fixture.slc', bytes: slc3(), expectedInputs: 1 },
@@ -137,6 +138,41 @@ test('detects and imports verified fixtures for every registered source family',
     assert.equal(inputs.length, fixture.expectedInputs, `${fixture.filename} input count`);
     assert.ok(parsed.replay.source.sha256.length === 64);
   }
+});
+
+test('round-trips official RE4 records and no longer catalogs RE3', async () => {
+  const bytes = replayEngine4();
+  const format = getFormat('replayengine4');
+  assert.ok(format?.parser && format.exporter);
+  const parsed = await format.parser.parse({ bytes, filename: 'fixture.re4' });
+  const state = parsed.replay.events.find((event) => event.kind === 'player-state');
+  assert.deepEqual(state && { tick: state.tick, player: state.player, x: state.x, y: state.y }, {
+    tick: '5', player: 1, x: 12.5, y: 3,
+  });
+  const physics = parsed.replay.events.find((event) => event.kind === 'extension' && event.namespace === 'replayengine4');
+  assert.ok(physics?.kind === 'extension');
+  assert.deepEqual(physics.payload, { player: 1, yAcceleration: -1.25 });
+  assert.equal(format.exporter.assess(parsed.replay).decision, 'allowed');
+  const exported = await format.exporter.export(parsed.replay);
+  assert.deepEqual(exported.bytes, bytes);
+  assert.equal(getFormat('replayengine3'), undefined);
+});
+
+test('imports GDR JSON frame fixes as player path corrections', async () => {
+  const bytes = json({
+    ...gdrObject(),
+    frameFixes: [
+      { frame: 408, p1: { x: 528.3875732421875, y: 435, r: 90 } },
+      { frame: 409, p1: { x: 529.6858520507812, y: 437.4668884277344, r: 91.73076629638672 } },
+    ],
+  });
+  const format = getFormat('gdr-json');
+  assert.ok(format?.parser);
+  const parsed = await format.parser.parse({ bytes, filename: 'long-level.gdr.json' });
+  const states = parsed.replay.events.filter((event) => event.kind === 'player-state');
+  assert.equal(states.length, 3);
+  assert.ok(states.some((state) => state.tick === '408' && state.x === 528.3875732421875 && state.y === 435 && state.rotation === 90));
+  assert.ok(!parsed.replay.events.some((event) => event.kind === 'extension' && event.eventType === 'replay-extension'));
 });
 
 test('rejects malformed extension-only files instead of inventing replay data', async () => {

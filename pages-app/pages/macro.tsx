@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { analyzeReplay } from '../../lib/replay/analyze';
 import { assessUniversalConversion, convertUniversalReplay } from '../../lib/replay/conversion';
+import { macroHubJsonParser } from '../../lib/replay/formats/macrohub-json';
 import { formatRegistry } from '../../lib/replay/registry';
 import { validateCanonicalReplay } from '../../lib/replay/schema';
 import type { CanonicalReplayV1 } from '../../lib/replay/types';
@@ -34,7 +35,13 @@ export function MacroPage() {
       listComments(id),
     ]);
     if (fileError) throw fileError;
-    const replay = validateCanonicalReplay(JSON.parse(await canonical.text())) as CanonicalReplayV1;
+    const replay = macro.canonical_path.toLowerCase().endsWith('.macrohub')
+      ? (await macroHubJsonParser.parse({
+          bytes: new Uint8Array(await canonical.arrayBuffer()),
+          filename: macro.canonical_path,
+          mediaType: canonical.type,
+        })).replay
+      : validateCanonicalReplay(JSON.parse(await canonical.text())) as CanonicalReplayV1;
     return { macro, replay, comments };
   }, [id]);
   useEffect(() => {

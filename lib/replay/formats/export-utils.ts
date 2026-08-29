@@ -18,7 +18,6 @@ export interface InputFormatAssessmentOptions {
   controls: 'jump' | 'all';
   rate: RateEncoding;
   maxFrame: bigint;
-  playerStates?: 'forbid' | 're3';
   storesDuration?: boolean;
   storesLevel?: boolean;
   orderRank?: (event: ReplayEvent) => number;
@@ -203,21 +202,11 @@ export function assessInputFormat(
         );
       }
     } else if (event.kind === 'player-state') {
-      if (options.playerStates !== 're3') {
-        return blocked(
-          `${options.code}_PLAYER_STATE_UNSUPPORTED`,
-          'gameplay-loss',
-          `${options.label} cannot safely preserve the replay's position or rotation corrections.`,
-        );
-      }
-      if (event.x === undefined || event.y === undefined || event.rotation === undefined
-        || asFloat32(event.x) !== event.x || asFloat32(event.y) !== event.y || asFloat32(event.rotation) !== event.rotation) {
-        return blocked(
-          `${options.code}_PLAYER_STATE_PRECISION`,
-          'gameplay-loss',
-          `${options.label} cannot preserve a player-state correction exactly.`,
-        );
-      }
+      return blocked(
+        `${options.code}_PLAYER_STATE_UNSUPPORTED`,
+        'gameplay-loss',
+        `${options.label} cannot safely preserve the replay's position or rotation corrections.`,
+      );
     } else if (event.kind === 'death' || event.kind === 'checkpoint') {
       return blocked(
         `${options.code}_GAMEPLAY_EVENT_UNSUPPORTED`,

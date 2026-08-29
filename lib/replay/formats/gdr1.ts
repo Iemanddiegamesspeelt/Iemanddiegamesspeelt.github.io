@@ -1,6 +1,6 @@
 import { decode } from '@msgpack/msgpack';
 import type { MacroParser } from '../interfaces';
-import type { ImportedExtraEvent, ImportedInput } from './import-utils';
+import type { ImportedExtraEvent, ImportedInput, ImportedPlayerState } from './import-utils';
 import {
   asArray,
   asBoolean,
@@ -17,8 +17,10 @@ import {
 } from './import-utils';
 
 const VERSION = '1.0.0';
-const ROOT_FIELDS = new Set(['author', 'description', 'duration', 'gameVersion', 'version', 'framerate', 'seed', 'coins', 'ldm', 'bot', 'level', 'inputs']);
+const ROOT_FIELDS = new Set(['author', 'description', 'duration', 'gameVersion', 'version', 'framerate', 'seed', 'coins', 'ldm', 'bot', 'level', 'inputs', 'frameFixes']);
 const INPUT_FIELDS = new Set(['frame', 'btn', '2p', 'down', 'correction']);
+const FRAME_FIX_FIELDS = new Set(['frame', 'p1', 'p2']);
+const FRAME_STATE_FIELDS = new Set(['x', 'y', 'r']);
 function isGdrObject(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const object = value as Record<string, unknown>;
@@ -39,6 +41,7 @@ async function parseGdr(value: unknown, bytes: Uint8Array, formatId: 'gdr' | 'gd
   const rate = root.framerate === undefined ? 240 : asFiniteNumber(root.framerate, 'GDR framerate');
   const sourceInputs = asArray(root.inputs, 'GDR inputs');
   const inputs: ImportedInput[] = [];
+  const playerStates: ImportedPlayerState[] = [];
   const extraEvents: ImportedExtraEvent[] = [];
 
   sourceInputs.forEach((source, index) => {
@@ -82,6 +85,51 @@ async function parseGdr(value: unknown, bytes: Uint8Array, formatId: 'gdr' | 'gd
     inputs.push(input);
   });
 
+  if (root.frameFixes !== undefined) {
+    asArray(root.frameFixes, 'GDR frame fixes').forEach((source, index) => {
+      const fix = asObject(source, `GDR frame fix ${index}`);
+      const tick = BigInt(asInteger(fix.frame, `GDR frame fix ${index} frame`));
+      ([['p1', 1], ['p2', 2]] as const).forEach(([key, player]) => {
+        if (fix[key] === undefined || fix[key] === null) return;
+        const state = asObject(fix[key], `GDR frame fix ${index} ${key}`);
+        const x = optionalFiniteNumber(state.x, `GDR frame fix ${index} ${key}.x`);
+        const y = optionalFiniteNumber(state.y, `GDR frame fix ${index} ${key}.y`);
+        const rotation = optionalFiniteNumber(state.r, `GDR frame fix ${index} ${key}.r`);
+        if (x !== undefined || y !== undefined || rotation !== undefined) {
+          playerStates.push({
+            tick,
+            player,
+            ...(x !== undefined ? { x } : {}),
+            ...(y !== undefined ? { y } : {}),
+            ...(rotation !== undefined ? { rotation } : {}),
+          });
+        }
+        const stateExtra = unknownFields(state, FRAME_STATE_FIELDS);
+        if (Object.keys(stateExtra).length) {
+          extraEvents.push({
+            tick,
+            kind: 'extension',
+            namespace: 'gdr',
+            eventType: 'frame-state-extension',
+            critical: true,
+            payload: { player, data: toJsonValue(stateExtra) },
+          });
+        }
+      });
+      const fixExtra = unknownFields(fix, FRAME_FIX_FIELDS);
+      if (Object.keys(fixExtra).length) {
+        extraEvents.push({
+          tick,
+          kind: 'extension',
+          namespace: 'gdr',
+          eventType: 'frame-fix-extension',
+          critical: true,
+          payload: toJsonValue(fixExtra),
+        });
+      }
+    });
+  }
+
   const replayExtra = unknownFields(root, ROOT_FIELDS);
   if (Object.keys(replayExtra).length) {
     extraEvents.push({
@@ -111,6 +159,7 @@ async function parseGdr(value: unknown, bytes: Uint8Array, formatId: 'gdr' | 'gd
     geometryDashVersion: String(gameVersion),
     durationTicks: durationSeconds === undefined ? undefined : ticksFromSeconds(durationSeconds, rate),
     inputs,
+    playerStates,
     extraEvents,
     extensions: {
       'gdr/metadata': {

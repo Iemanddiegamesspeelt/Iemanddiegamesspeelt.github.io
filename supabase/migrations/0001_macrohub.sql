@@ -475,7 +475,7 @@ insert into public.macro_formats (id, display_name, extension, description) valu
   ('tcbot', 'TCM', '.tcm', 'TCBot macro'),
   ('amethyst', 'THYST', '.thyst', 'Amethyst replay'),
   ('gdmo', 'MACRO', '.macro', 'GDMO macro'),
-  ('replayengine3', 'RE3', '.re3', 'ReplayEngine 3 replay')
+  ('replayengine4', 'RE4', '.re4', 'GDH Replay Engine 4 replay')
 on conflict (id) do update set display_name = excluded.display_name, extension = excluded.extension, description = excluded.description;
 
 insert into public.replay_tools (id, display_name) values
@@ -483,7 +483,7 @@ insert into public.replay_tools (id, display_name) values
   ('silicate', 'Silicate'), ('tcbot', 'TCBot'), ('icreate-pro', 'iCreate Pro'), ('mega-hack', 'Mega Hack'),
   ('xbot', 'xBot'), ('xdbot', 'xdBot'), ('echo', 'Echo'), ('replaybot', 'ReplayBot'), ('ybot', 'yBot'),
   ('omegabot', 'OmegaBot'), ('tasbot', 'TASBot'), ('zbot', 'zBot'), ('rush', 'Rush'), ('kdbot', 'KD-Bot'),
-  ('fembot', 'Fembot'), ('amethyst', 'Amethyst'), ('gdmo', 'GDMO'), ('macrohub', 'MacroHub Converter')
+  ('fembot', 'Fembot'), ('amethyst', 'Amethyst'), ('gdmo', 'GDMO'), ('gdh', 'GDH'), ('macrohub', 'MacroHub Converter')
 on conflict (id) do update set display_name = excluded.display_name;
 
 insert into public.format_tool_compatibility (format_id, replay_tool_id, direction, support, verification, recommended, notes) values
@@ -496,7 +496,7 @@ insert into public.format_tool_compatibility (format_id, replay_tool_id, directi
   ('mhr', 'mega-hack', 'both', 'native', 'community-reported', true, 'Strict MHR v7 HACK layout.'),
   ('mhr-json', 'mega-hack', 'both', 'native', 'community-reported', false, 'Mega Hack Replay JSON.'),
   ('ybot', 'ybot', 'both', 'native', 'community-reported', true, 'Versioned yBot action layout.'),
-  ('replayengine3', 'openhack', 'both', 'native', 'community-reported', true, 'Version-specific relation.'),
+  ('replayengine4', 'gdh', 'both', 'native', 'verified', true, 'Official GDH Replay Engine v4 format.'),
   ('gdr', 'prism-menu', 'import', 'partial', 'community-reported', false, 'Verify the installed Prism Menu version.'),
   ('gdr', 'quartz', 'both', 'native', 'community-reported', true, 'Version-specific relation.'),
   ('slc', 'silicate', 'both', 'native', 'community-reported', true, 'SLC has multiple versions.'),
