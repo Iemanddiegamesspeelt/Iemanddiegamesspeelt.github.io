@@ -35,6 +35,7 @@ export type MacroRow = {
   uploader_id: string;
   title: string;
   description: string | null;
+  preview_video_url: string | null;
   completion: number | null;
   rate_kind: 'tps' | 'fps';
   rate: number | null;
