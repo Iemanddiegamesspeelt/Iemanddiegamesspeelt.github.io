@@ -162,10 +162,13 @@ function ReportMacro({ macro }: { macro: MacroRow }) {
   async function report(status: 'working' | 'broken' | 'outdated') {
     if (!user) return;
     if (restricted) { setMessage('Your account is temporarily restricted.'); return; }
+    const removing = review === status;
     setMessage('Saving…');
     let { error } = await supabase().rpc('submit_macro_review', { p_macro_id: macro.id, p_status: status });
     if (error && (error.code === 'PGRST202' || error.message.toLowerCase().includes('submit_macro_review'))) {
-      const fallback = await supabase().from('macro_reports').upsert({ macro_id: macro.id, reporter_id: user.id, status, created_at: new Date().toISOString(), resolved_at: null, resolved_by: null }, { onConflict: 'macro_id,reporter_id' });
+      const fallback = removing
+        ? await supabase().from('macro_reports').delete().eq('macro_id', macro.id).eq('reporter_id', user.id)
+        : await supabase().from('macro_reports').upsert({ macro_id: macro.id, reporter_id: user.id, status, created_at: new Date().toISOString(), resolved_at: null, resolved_by: null }, { onConflict: 'macro_id,reporter_id' });
       error = fallback.error;
     }
     if (error) setMessage(error.message);
@@ -173,14 +176,14 @@ function ReportMacro({ macro }: { macro: MacroRow }) {
       setCounts((current) => {
         const next = { ...current };
         if (review) next[review] = Math.max(0, next[review] - voteWeight);
-        next[status] += voteWeight;
+        if (!removing) next[status] += voteWeight;
         return next;
       });
-      setReview(status);
-      setMessage('Review saved. You can change it anytime.');
+      setReview(removing ? null : status);
+      setMessage(removing ? 'Review removed.' : 'Review saved. Click it again to remove it.');
     }
   }
-  return <section className={`rounded-[24px] border p-5 ${communityWarning ? 'border-amber-400/20 bg-amber-400/[.055]' : 'border-white/[.075] bg-[#0e1118]'}`}><h2 className="text-sm font-semibold">Does this macro work?</h2>{communityWarning && <p role="alert" className="mt-3 text-xs leading-5 text-amber-100">Community warning: broken and outdated reviews outnumber working reviews.</p>}<div className="mt-4 grid grid-cols-3 gap-2">{([['working', working], ['broken', broken], ['outdated', outdated]] as const).map(([status, count]) => user ? <button key={status} type="button" disabled={restricted} onClick={() => void report(status)} className={`rounded-lg border px-2 py-2 text-[9px] capitalize transition disabled:cursor-not-allowed disabled:opacity-40 ${review === status ? 'border-violet-400/35 bg-violet-400/15 text-violet-100' : 'border-white/[.07] bg-white/[.025] text-zinc-400 hover:text-white'}`}>{status}<span className="ml-1 text-zinc-600">{count}</span></button> : <span key={status} className="rounded-lg border border-white/[.06] bg-white/[.02] px-2 py-2 text-center text-[9px] capitalize text-zinc-500">{status}<span className="ml-1 text-zinc-700">{count}</span></span>)}</div>{!user && <Link to={`/login?return_to=${encodeURIComponent(`/macro/${macro.id}`)}`} className="mt-4 inline-flex text-xs font-semibold text-violet-300">Sign in to review</Link>}{restricted && <p className="mt-3 text-[10px] leading-4 text-amber-200">Reviews are unavailable while your account is restricted.</p>}{voteWeight === 10 && <p className="mt-3 text-[10px] leading-4 text-violet-300">Your moderator review counts as 10.</p>}{message && <p className="mt-3 text-[10px] leading-4 text-zinc-600">{message}</p>}<p className="mt-3 text-[9px] leading-4 text-zinc-700">A community warning needs at least 10 reviews.</p></section>;
+  return <section className={`rounded-[24px] border p-5 ${communityWarning ? 'border-amber-400/20 bg-amber-400/[.055]' : 'border-white/[.075] bg-[#0e1118]'}`}><h2 className="text-sm font-semibold">Does this macro work?</h2>{communityWarning && <p role="alert" className="mt-3 text-xs leading-5 text-amber-100">Community warning: broken and outdated reviews outnumber working reviews.</p>}<div className="mt-4 grid grid-cols-3 gap-2">{([['working', working], ['broken', broken], ['outdated', outdated]] as const).map(([status, count]) => user ? <button key={status} type="button" disabled={restricted} aria-pressed={review === status} title={review === status ? 'Click again to remove your review' : undefined} onClick={() => void report(status)} className={`rounded-lg border px-2 py-2 text-[9px] capitalize transition disabled:cursor-not-allowed disabled:opacity-40 ${review === status ? 'border-violet-400/35 bg-violet-400/15 text-violet-100' : 'border-white/[.07] bg-white/[.025] text-zinc-400 hover:text-white'}`}>{status}<span className="ml-1 text-zinc-600">{count}</span></button> : <span key={status} className="rounded-lg border border-white/[.06] bg-white/[.02] px-2 py-2 text-center text-[9px] capitalize text-zinc-500">{status}<span className="ml-1 text-zinc-700">{count}</span></span>)}</div>{!user && <Link to={`/login?return_to=${encodeURIComponent(`/macro/${macro.id}`)}`} className="mt-4 inline-flex text-xs font-semibold text-violet-300">Sign in to review</Link>}{restricted && <p className="mt-3 text-[10px] leading-4 text-amber-200">Reviews are unavailable while your account is restricted.</p>}{voteWeight === 10 && <p className="mt-3 text-[10px] leading-4 text-violet-300">Your moderator review counts as 10.</p>}{message && <p className="mt-3 text-[10px] leading-4 text-zinc-600">{message}</p>}<p className="mt-3 text-[9px] leading-4 text-zinc-700">A community warning needs at least 10 reviews.</p></section>;
 }
 
 function MacroModerationReport({ macro }: { macro: MacroRow }) {
