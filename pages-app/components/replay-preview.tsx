@@ -160,7 +160,7 @@ export function ReplayPathPreview({ replay }: { replay: CanonicalReplayV1 }) {
     return () => cancelAnimationFrame(frame);
   }, [playEpoch, playing, preview, speed]);
 
-  if (!preview) return null;
+  if (!preview) return <section className="rounded-[28px] border border-white/[.075] bg-[#0e1118] p-6 sm:p-8"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-violet-300">Replay movement</p><h2 className="mt-2 text-xl font-semibold">No recorded path</h2><p className="mt-2 text-xs leading-5 text-zinc-600">This replay contains inputs but no X/Y position samples, so its movement cannot be reconstructed accurately.</p></section>;
 
   const activePlayers = ([1, 2] as const).flatMap((player): PlaybackPlayer[] => {
     const point = interpolate(preview.players[player], playhead);
